@@ -37,6 +37,16 @@ std::string get_token (std::istream& in) {
 	while (!in.eof()) {
 		char c = in.get ();
 		switch(c) {
+			case '$':
+				if (accum.str ().size ()) {
+					std::string tmp = accum.str ();
+					accum.str ().clear ();
+					in.putback (c);
+					return tmp;
+				} else {
+					accum << c;
+				}
+			break;
 			case '\n': case '[': case ']': case '{': case '}':
 				if (accum.str ().size ()) {
 					in.putback (c);
@@ -76,6 +86,7 @@ Node_ptr read (std::istream& in) {
 		std::string nterm = (token == "[" ? "}" : "]");
 		while (!in.eof ()) {
 			Node_ptr n = read (in);
+			if (n->lexeme == "\n") continue;
 			if (n->lexeme == term) break;
 			if (n->lexeme == nterm) {
 				throw std::runtime_error ("invalid terminator in expression");
@@ -118,6 +129,13 @@ std::ostream& print (Node_ptr n, std::ostream& out) {
 }
 
 Node_ptr eval (Node_ptr node, Node_ptr env) {
+	if (node->type == QUOTE) return node;
+	if (node->type == LEXEME) {
+		if (node->lexeme[0] == '$') {
+			return assoc (node, env);
+		}
+	}
+
 
 	return node;
 }
