@@ -37,7 +37,7 @@ std::string get_token (std::istream& in) {
 	while (!in.eof()) {
 		char c = in.get ();
 		switch(c) {
-			case ';': case '[': case ']': case '{': case '}':
+			case '\n': case '[': case ']': case '{': case '}':
 				if (accum.str ().size ()) {
 					in.putback (c);
 				} else {
@@ -45,7 +45,7 @@ std::string get_token (std::istream& in) {
 				}
 				return accum.str ();
 			break;
-			case '\t': case ' ': case '\n': case '\r':
+			case '\t': case ' ':  case '\r':
 				if (accum.str ().size ()) {
 					return accum.str ();
 				} else continue;
@@ -57,7 +57,7 @@ std::string get_token (std::istream& in) {
 					accum << c;
 					if (c == '\"') break;
 				}
-				return accum.str ();
+				return accum.str ().substr (1, accum.str ().size () - 2);
 			break;
 			default:
 				if (!in.eof ()) accum << c;
@@ -68,32 +68,35 @@ std::string get_token (std::istream& in) {
 }
 
 Node_ptr read (std::istream& in) {
-	Node_ptr coll = Node::create (BLOCK);
-	while (!in.eof ()) {
-		std::string token = get_token (in);
-		if (token == ";") break;
+	std::string token = get_token (in);
 
-		if (token == "[" || token == "{") {
-			Node_ptr l = Node::create (token == "[" ? BLOCK : QUOTE);
-			std::string term = (token == "[" ? "]" : "}");
-			std::string nterm = (token == "[" ? "}" : "]");
-			while (!in.eof ()) {
-				Node_ptr n = read (in);
-				std::cout << "** " << n->lexeme << std::endl;
-				if (n->lexeme == term) break;
-				if (n->lexeme == nterm) {
-					throw std::runtime_error ("invalid terminator in expression");
-				}
-				l->tail.push_back(n);
+	if (token == "[" || token == "{") {
+		Node_ptr l = Node::create (token == "[" ? BLOCK : QUOTE);
+		std::string term = (token == "[" ? "]" : "}");
+		std::string nterm = (token == "[" ? "}" : "]");
+		while (!in.eof ()) {
+			Node_ptr n = read (in);
+			if (n->lexeme == term) break;
+			if (n->lexeme == nterm) {
+				throw std::runtime_error ("invalid terminator in expression");
 			}
-			coll->tail.push_back(l);
-		} else {
-			Node_ptr s = Node::create (LEXEME);
-			s->lexeme = token;
-			coll->tail.push_back(s);
+			l->tail.push_back(n);
 		}
+		return l;
+	} else {
+		Node_ptr s = Node::create (LEXEME);
+		s->lexeme = token;
+		return s;
 	}
-	return coll;
+}
+Node_ptr read_block (std::istream& in) {
+	Node_ptr bl = Node::create(BLOCK);
+	while (!in.eof ()) {
+		Node_ptr n = read (in);
+		if (n->lexeme == "\n") break;
+		bl->tail.push_back(n);
+	}
+	return bl;
 }
 std::ostream& print (Node_ptr n, std::ostream& out) {
 	switch (n->type) {
@@ -101,9 +104,14 @@ std::ostream& print (Node_ptr n, std::ostream& out) {
 			out << n->lexeme;
 		break;
 		case QUOTE:	case BLOCK:
+		if (n->type == QUOTE) out << "{";
+		else out << "[";
 		for (unsigned i = 0; i < n->tail.size (); ++i) {
-			print (n->tail.at (i), out); out << " ";
+			print (n->tail.at (i), out); 
+			if (i != n->tail.size () - 1) out << " ";
 		}
+		if (n->type == QUOTE) out << "}";
+		else out << "]";		
 		break;
 	}
 	return out;
@@ -118,7 +126,7 @@ void repl (Node_ptr env) {
 	std::cout << ">> ";
 	while (true) {
 		try {
-			print (eval (read (std::cin), env), std::cout);
+			print (eval (read_block (std::cin), env), std::cout);
 			std::cout << std::endl;
 		} catch (std::exception& e) {
 			std::cout << "error: " << e.what () << std::endl;
