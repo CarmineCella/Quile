@@ -9,7 +9,7 @@ using namespace std;
 
 int main (int argc, char* argv[]) {
 
-	Node_ptr n = Node::create (QUOTE);
-	repl (n);
+	Node_ptr env = init_env ();
+	repl (env);
 	return 0;
 }
