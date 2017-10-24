@@ -1,0 +1,14 @@
+digraph {
+	node [shape=box]
+	
+	"Lisp" -> "BYO Lisp"
+	"Lisp" -> "Scheme"
+	"Lisp" -> "TCL"
+	"Scheme" -> "Vuza"
+	"Scheme" -> "Helyc"
+	"BYO Lisp" -> "Helyc"
+	"TCL" -> "Skicl"
+	"Vuza" -> "Skicl"
+	"Helyc" -> "Skicl"
+
+}
