@@ -12,12 +12,17 @@
 #include <iostream>
 #include <map>
 
+// TODO: primitive, if, while, upval, eval, serializzazione, test
+// speed, tail ricorsione, return, break, continue, static scope, upvar?
+
 // ast
 typedef double Real;
 typedef std::deque<std::string> Block;
 struct Namespace;
 typedef std::string (*Action) (Block& b, Namespace&);
 struct Namespace {
+	Namespace () { parent = nullptr; }
+	Namespace* parent;
     std::map<std::string, std::string> variables;
     std::map<std::string, Block> proceduers;
     std::map<std::string, Action> functors;
@@ -72,7 +77,7 @@ std::string get_token (std::istream& input) {
 	                c = input.get ();
 	                accum << c;
 	            } while (c != '\"' && !input.eof ());
-				return accum.str ().substr (1, accum.str ().size () - 2);
+				return accum.str (); 
 			break;             
 			default:
 				if (c > 0) accum << c;
@@ -115,6 +120,8 @@ std::string eval (std::istream& in, Namespace& nspace) {
      		int p = token.find_first_of("{");
         	int e = token.find_last_of("}");
         	b.push_back(token.substr (p + 1, e - 1));        	
+        } else if (token[0] == '\"') {
+        	b.push_back(token.substr (1, token.substr ().size () - 2));
         } else b.push_back(token);
     }
     if (b.size () == 0) return "";
@@ -155,7 +162,6 @@ std::string eval (std::istream& in, Namespace& nspace) {
 
 // functors
 std::string fn_puts (Block& b, Namespace& nspace) {
-    // check_args ("puts", b, 1);
     for (unsigned i = 0; i < b.size (); ++i) std::cout << b.at (i);
     return "";
 }
@@ -236,6 +242,8 @@ void init_namespace (Namespace& nspace) {
     nspace.functors["<="] = fn_binop<'L'>;
     nspace.functors[">="] = fn_binop<'G'>;
     nspace.functors["=="] = fn_binop<'='>;
+
+    nspace.variables["nl"] = "\n";
 }
 void repl (std::istream& in, Namespace& nspace) {
     while (true) { 
