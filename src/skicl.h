@@ -29,7 +29,27 @@ std::string get_token (std::istream& input) {
 	while (!input.eof ()) {
 		char c = input.get ();
 		switch (c) {
-			case '[': case ']': case '\n': 
+			case '{': case '[': {
+				std::string valid_terminator = "}";	std::string invalid_terminator = "]";
+				if (c == '[') {
+					valid_terminator = "]";	invalid_terminator = "}";
+				}
+		        accum << c;
+	            while (!input.eof ()) {
+	                std::string s = get_token(input);
+	                accum << s << " ";
+					if (s == valid_terminator) break;	
+					if (s == invalid_terminator) {
+						std::stringstream err;
+						err << "illegal terminator " << invalid_terminator 
+							<< " in " << accum.str ();
+						throw std::runtime_error (err.str ());
+					}
+	            }
+				return accum.str ();
+			}
+			break;  			
+			case ']': case '\n': case '}':
  				if (accum.str ().size ()) {
 					input.unget();
 					return accum.str ();
@@ -45,13 +65,13 @@ std::string get_token (std::istream& input) {
 			case ' ': case '\t': case '\r':
 				if (accum.str ().size ()) return accum.str ();
 				else continue;
-			break;
-			case '{':
+			break;   
+			case '\"':
 		        accum << c;
 	            do  {
 	                c = input.get ();
 	                accum << c;
-	            } while (c != '}' && !input.eof ());
+	            } while (c != '\"' && !input.eof ());
 				return accum.str ().substr (1, accum.str ().size () - 2);
 			break;             
 			default:
@@ -73,10 +93,10 @@ Block& check_args (const std::string& cmd, Block& b, int i) {
 std::string eval (std::istream& in, Namespace& nspace) {
     Block b;
     while (!in.eof ()) {
-        std::string token = get_token (in);
-        if (token.size () == 0) continue;
-        if (token == "\n") break;
-        if (token[0] == '$') {
+ 		std::string token = get_token(in);
+ 		if (token.size () == 0) continue;
+ 		if (token == "\n") break;
+       	if (token[0] == '$') {
             std::string key = token.substr (1, token.size () - 1);
             if (nspace.variables.find (key) != nspace.variables.end ()) {
                 b.push_back (nspace.variables[key]);
@@ -85,20 +105,17 @@ std::string eval (std::istream& in, Namespace& nspace) {
                 err << "undeclared identifier " << key;
                 throw std::runtime_error (err.str ());
             }
-        } else if (token == "[") {
-            std::stringstream code;
-            while (!in.eof ()) {
-                token = get_token(in);
-                if (token == "]") break;
-                code << token << " ";
-            }
-            if (token != "]") {
-                std::stringstream err;
-                err << "invalid syntax in " << code.str ();
-                throw std::runtime_error (err.str ());
-            } 
-            b.push_back (eval (code, nspace));
-        } else b.push_back (token);
+        } else if (token[0] == '[') {
+        	int p = token.find_first_of("[");
+        	int e = token.find_last_of("]");
+        	std::stringstream code;
+        	code << token.substr(p + 1, e - 1);
+        	b.push_back(eval (code, nspace));
+        } else if (token[0] == '{') {
+     		int p = token.find_first_of("{");
+        	int e = token.find_last_of("}");
+        	b.push_back(token.substr (p + 1, e - 1));        	
+        } else b.push_back(token);
     }
     if (b.size () == 0) return "";
     std::string cmd = b.at (0);
@@ -108,7 +125,8 @@ std::string eval (std::istream& in, Namespace& nspace) {
         std::stringstream code (nspace.proceduers[cmd].at (1));
         Block args;
         while (!argstream.eof ()) {
-            args.push_back (get_token (argstream));
+        	std::string a = get_token (argstream);
+            if (a.size ()) args.push_back (a);
         }
         Namespace nnspace = nspace;
         if (b.size () != args.size ()) {
@@ -121,6 +139,7 @@ std::string eval (std::istream& in, Namespace& nspace) {
         }
         std::string res;
         while (!code.eof ()) {
+        	if (code.str () == "\n") break;
             res = eval (code, nnspace);
         }
         return res;
@@ -136,8 +155,8 @@ std::string eval (std::istream& in, Namespace& nspace) {
 
 // functors
 std::string fn_puts (Block& b, Namespace& nspace) {
-    check_args ("puts", b, 1);
-    std::cout << b.at (0) << std::endl;
+    // check_args ("puts", b, 1);
+    for (unsigned i = 0; i < b.size (); ++i) std::cout << b.at (i);
     return "";
 }
 std::string fn_set (Block& b,  Namespace& nspace) {
@@ -148,7 +167,7 @@ std::string fn_set (Block& b,  Namespace& nspace) {
 }
 std::string fn_proc (Block& b, Namespace& nspace) {
     check_args ("proc", b, 3);
-   std::string key = b.at (0);
+    std::string key = b.at (0);
     b.pop_front ();
     nspace.proceduers[key] = b;
     return key;
@@ -218,7 +237,7 @@ void init_namespace (Namespace& nspace) {
     nspace.functors[">="] = fn_binop<'G'>;
     nspace.functors["=="] = fn_binop<'='>;
 }
-void repl (std::istream& in, Namespace& nspace){
+void repl (std::istream& in, Namespace& nspace) {
     while (true) { 
         std::cout << ">> ";
         try {
@@ -226,6 +245,8 @@ void repl (std::istream& in, Namespace& nspace){
         } catch (std::exception& err) {
             std::cout << "error: " << err.what () << std::endl;
         }
-    } 
+    }  
 }
+
+
 #endif // SKICL_H
