@@ -14,21 +14,24 @@
 #include <variant>
 
 // TODO: primitive, if, while, upval, eval, serializzazione, test
-// speed, tail ricorsione, return, break, continue, static scope, upvar?
+// speed, block ricorsione, return, break, continue, static scope, upvar?
 
 // ast
 struct Atom;
 typedef std::shared_ptr<Atom> AtomPtr;
 typedef double Real;
 typedef AtomPtr (*Functor) (AtomPtr, AtomPtr);
-enum AtomType {ELEMENT, COLL, LIST, FUNCTOR};
+enum AtomType {ELEMENT, COLL, LIST, LAMBDA, FUNCTOR};
 struct Atom {
 private:
 	// create only via factory methods
 	struct _constructor_tag { explicit _constructor_tag() = default; }; 
 public:	
+	Atom (_constructor_tag) {
+		 token = ""; func = nullptr; 
+	}	
 	AtomType type;
-	std::string value;
+	std::string token;
 	std::deque<AtomPtr> block;
 	Functor func;
 	int minargs;
@@ -40,9 +43,17 @@ public:
 	static AtomPtr make_element (const std::string& v) { 
 		AtomPtr s = std::make_shared<Atom> (_constructor_tag{});
 		s->type = AtomType::ELEMENT; 
-		s->value = v; 
+		s->token = v; 
 		return s;
 	}
+	static AtomPtr make_lambda (AtomPtr args, AtomPtr body, AtomPtr closure) {
+		AtomPtr s = std::make_shared<Atom> (_constructor_tag{}); 
+		s->type = AtomType::LAMBDA;
+		s->block.push_back(args);
+		s->block.push_back(body);
+		s->block.push_back(closure);
+		return s;	
+	}	
 	static AtomPtr make_functor (Functor a, int min = 0) {
 		AtomPtr s = std::make_shared<Atom> (_constructor_tag{});
 		s->type = AtomType::FUNCTOR;
@@ -51,33 +62,37 @@ public:
 		return s;	
 	}
 };
-
+bool is_null (AtomPtr node) { 
+	return !node || 
+		((node->type == AtomType::COLL || node->type == AtomType::LIST) 
+			&& node->block.size () == 0);
+}
+int atom_eq (AtomPtr x, AtomPtr y) {
+	if (x->type != y->type) return 0;
+	switch (x->type) {
+	    case AtomType::ELEMENT: return (x->token == y->token);
+	    case AtomType::COLL: case AtomType::LIST:  {
+			if (x->block.size () != y->block.size ()) { return 0; }
+			for (unsigned i = 0; i < x->block.size (); ++i) {
+				if (!atom_eq (x->block.at(i), y->block.at(i))) { return 0; }
+			}
+			return 1;
+		}
+		case AtomType::LAMBDA: 
+			if (x->block.size () < 2 || y->block.size () < 2) return 0;
+			return (atom_eq (x->block.at(0), y->block.at(0)) 
+				&& atom_eq (x->block.at(1), y->block.at(1)));
+	    case AtomType::FUNCTOR: return (x->func == y->func);
+		default:
+		return 0;
+	}
+}
 // lexing
 std::string get_token (std::istream& input) {
 	std::stringstream accum;
 	while (!input.eof ()) {
 		char c = input.get ();
-		switch (c) {
-			// case '{': case '[': {
-			// 	std::string valid_terminator = "}";	std::string invalid_terminator = "]";
-			// 	if (c == '[') {
-			// 		valid_terminator = "]";	invalid_terminator = "}";
-			// 	}
-		 //        accum << c;
-	  //           while (!input.eof ()) {
-	  //               std::string s = get_token(input);
-	  //               accum << s << " ";
-			// 		if (s == valid_terminator) break;	
-			// 		if (s == invalid_terminator) {
-			// 			std::stringstream err;
-			// 			err << "illegal terminator " << invalid_terminator 
-			// 				<< " in " << accum.str ();
-			// 			throw std::runtime_error (err.str ());
-			// 		}
-	  //           }
-			// 	return accum.str ();
-			// }
-			// break;  			
+		switch (c) { 			
 			case ']': case '\n': case '}': case '[': case '{':
  				if (accum.str ().size ()) {
 					input.unget();
@@ -119,113 +134,149 @@ std::string get_token (std::istream& input) {
 //     }
 //     return b;
 // }
-AtomPtr read (std::istream& input) {
-	std::string token = get_token (input);
+std::ostream& print (AtomPtr node, std::ostream& out);
+void error (const std::string& err, AtomPtr node) {
+	std::stringstream tmp;
+	tmp << err;
+	if (node) {
+		std::stringstream tmp2;
+		print (node, tmp2);
+		tmp << " " << tmp2.str ();
+	}
+	throw std::runtime_error (tmp.str ());
+}
+AtomPtr read (std::istream& input, const std::string& terminator = "\n") {
+	AtomPtr code = Atom::make_sequence (true); // executable
 	while (!input.eof ()) {
+		std::string token = get_token (input);
+		if (token.size() == 0) continue;
+		if (token == "\n") break;
 		if (token == "[" || token == "{") {
 			std::string valid_terminator = "]";	std::string invalid_terminator = "}";
-			if (token == "{") {
-				valid_terminator = "}";	invalid_terminator = "]";
-			}
+			if (token == "{") valid_terminator = "}"; invalid_terminator = ")";
 			AtomPtr list = Atom::make_sequence(token == "[");
-			AtomPtr ct = Atom::make_sequence ();
 			while (!input.eof ()) {
-				ct = read(input);
-				if (ct->value == valid_terminator) break;	
-				if (ct->value == invalid_terminator) {
-					std::stringstream err;
-					err << "illegal terminator " << invalid_terminator;
-					throw std::runtime_error (err.str ());
-				}
+				AtomPtr ct = read(input, valid_terminator);
 				list->block.push_back (ct);
+				if (ct->block.size () > 0 && 
+					ct->block.at(ct->block.size () - 1)->token == invalid_terminator) {
+					error ("illegal terminator used in ", list);
+				}
+				print  (ct, std::cout) << std::endl;
+				std::cout << valid_terminator << "----" << std::endl;
+				if (ct->block.size () > 0 && 
+					ct->block.at (ct->block.size () - 1)->token == valid_terminator) {
+					ct->block.pop_back();
+					break;
+				} 
 			}
-			if (ct->value != valid_terminator) {
-				throw std::runtime_error ("unexpected EOF while parsing");
-			}
-			return list;
+
+			code->block.push_back(list);
+			return code;
 		} else {
 			AtomPtr s = Atom::make_element (token);
-			return s;
+			code->block.push_back(s);
 		}
 	}
-	return Atom::make_sequence ();
+	return code;
 }
-std::string eval (AtomPtr node, AtomPtr env) {
+AtomPtr assoc (AtomPtr sym, AtomPtr env) {
+	AtomPtr r = Atom::make_sequence ();;
+	for (unsigned i = 1; i < env->block.size () / 2 + 1; ++i) {
+		if (atom_eq (env->block.at (i * 2 - 1), sym)) return env->block.at (i * 2);
+	}
+	if (!is_null (env->block.at (0))) return assoc (sym, env->block.at (0));
+	error ("unbound identifier", sym);
+	return Atom::make_sequence ();; // not reached
+}
+AtomPtr extend (AtomPtr key, AtomPtr val, AtomPtr env, bool recurse = false) {
+	for (unsigned i = 1; i <= env->block.size () / 2; ++i) {
+		if (atom_eq (env->block.at (2 * i - 1), key)) {
+			env->block.at (2 * i) = val; 
+			return val;
+		}
+	}
+	if (recurse) {
+		if (!is_null(env->block.at(0))) return extend(key, val, env->block.at(0), recurse);
+	} 
+	env->block.push_back (key); env->block.push_back (val);
+	return val;
+}
+AtomPtr eval (AtomPtr node, AtomPtr env) {
+    if (is_null (node)) return Atom::make_sequence();
+    AtomPtr evaluated = Atom::make_sequence();
+    for (unsigned i = 0; i < node->block.size (); ++i) {
+    	AtomPtr c = node->block.at (i);
+    	if (c->type == LIST) {
+    		for (unsigned j = 0; i < c->block.size (); ++i) {
+    			print (c->block.at (j), std::cout) << std::endl;
+    			evaluated->block.push_back(eval (c->block.at (j), env));
+    		}
+    	} else if (c->type == COLL) {
+    		for (unsigned j = 0; i < c->block.size (); ++i) {
+    			evaluated->block.push_back(c->block.at (j));
+    		}
+    	} else {
+    		if (c->token[0] == '$') {
+    			c->token = c->token.substr(1, c->token.size () -1);
+    			evaluated->block.push_back (assoc (c, env));
+    		} //else if (c->token == "\n") continue;
+    		else {
+    			evaluated->block.push_back(c);
+    		}
+    	}
+    }
+    if (evaluated->block.size () == 0) return Atom::make_sequence();
     
-    while (!in.eof ()) {
- 		std::string token = get_token(in);
- 		if (token.size () == 0) continue;
- 		if (token == "\n") break;
-       	if (token[0] == '$') {
-            std::string key = token.substr (1, token.size () - 1);
-            if (nspace.variables.find (key) != nspace.variables.end ()) {
-                b.push_back (nspace.variables[key]);
-            } else {
-                std::stringstream err;
-                err << "undeclared identifier " << key;
-                throw std::runtime_error (err.str ());
-            }
-        } else if (token[0] == '[') {
-        	int p = token.find_first_of("[");
-        	int e = token.find_last_of("]");
-        	std::stringstream code;
-        	code << token.substr(p + 1, e - 1);
-        	b.push_back(eval (code, nspace));
-        } else if (token[0] == '{') {
-     		int p = token.find_first_of("{");
-        	int e = token.find_last_of("}");
-        	b.push_back(token.substr (p + 1, e - 1));        	
-        } else if (token[0] == '\"') {
-        	b.push_back(token.substr (1, token.substr ().size () - 2));
-        } else b.push_back(token);
-    }
-    if (b.size () == 0) return "";
-    std::string cmd = b.at (0);
-    b.pop_front ();
-    if (nspace.proceduers.find (cmd) != nspace.proceduers.end ()) {
-        std::stringstream argstream (nspace.proceduers[cmd].at (0));
-        std::stringstream code (nspace.proceduers[cmd].at (1));
-        Block args;
-        while (!argstream.eof ()) {
-        	std::string a = get_token (argstream);
-            if (a.size ()) args.push_back (a);
-        }
-        Namespace nnspace = nspace;
-        if (b.size () != args.size ()) {
-            std::stringstream err;
-            err << "invalid number of arguments in " << cmd;
-            throw std::runtime_error (err.str ());
-        }
-        for (unsigned i = 0; i < b.size (); ++i) {
-            nnspace.variables[args.at (i)] = b.at (i);
-        }
-        std::string res;
-        while (!code.eof ()) {
-        	if (code.str () == "\n") break;
-            res = eval (code, nnspace);
-        }
-        return res;
-    } else if (nspace.functors.find (cmd) != nspace.functors.end ()) {
-        return nspace.functors[cmd](b, nspace);
-    } else {
-        std::stringstream err;
-        err << "undeclared command " << cmd;
-        throw std::runtime_error (err.str());
-    }
-    return "";
+    AtomPtr cmd = assoc (evaluated->block.at (0), env);
+    evaluated->block.pop_front ();
+    if (cmd->type == LAMBDA) {
+    } else if (cmd->type == FUNCTOR) {
+    	return cmd->func (evaluated, env);
+    } else error ("function expected in", cmd);
+    return Atom::make_sequence();
 }
 
 // functors
-std::string fn_puts (AtomPtr b, Namespace& nspace) {
-    for (unsigned i = 0; i < b.size (); ++i) std::cout << b.at (i);
-    return "";
+std::ostream& print (AtomPtr node, std::ostream& out) {
+	switch (node->type) {
+		case ELEMENT:
+			out << ":"<< node->token <<":";
+		break;
+		case LIST: case COLL:
+			out << (node->type == LIST ? "[" : "{");
+			for (unsigned i = 0; i < node->block.size (); ++i) {
+				print (node->block.at (i), out) << " ";
+			}
+			out << (node->type == LIST ? "]" : "}");
+		break;
+		case LAMBDA:
+			if (node->block.size () < 2) return out;
+			print (node->block.at (0), out) << std::endl;
+			print (node->block.at (1), out) << std::endl;
+		break;
+		case FUNCTOR: 
+			out << "<" << (std::hex) << &node->func << ", " 
+				<< node->minargs << " min args>";
+		break;
+	}
+	return out;
 }
-// std::string fn_set (AtomPtr b,  Namespace& nspace) {
-//     check_args ("set", b, 2);
-//     std::string key = b.at (0);
-//     nspace.variables[key] = b.at (1);
-//     return b.at (1);
-// }
+AtomPtr fn_puts (AtomPtr b, AtomPtr env) {
+    for (unsigned i = 0; i < b->block.size (); ++i) {
+    	print (b->block.at (i), std::cout);
+    }
+    return Atom::make_element("");
+}
+AtomPtr fn_set (AtomPtr b,  AtomPtr env) {
+    // check_args ("set", b, 2);
+    return extend (b->block.at (0), b->block.at (1), env);
+}
+template <bool dynamic>
+AtomPtr fn_lambda (AtomPtr n, AtomPtr env) {
+	return Atom::make_lambda (n->block.at (0), n->block.at (1), 
+		dynamic ? Atom::make_sequence () : env);	
+}
 // std::string fn_proc (AtomPtr b, Namespace& nspace) {
 //     check_args ("proc", b, 3);
 //     std::string key = b.at (0);
@@ -233,36 +284,36 @@ std::string fn_puts (AtomPtr b, Namespace& nspace) {
 //     nspace.proceduers[key] = b;
 //     return key;
 // }
-// Real to_number (const std::string& s) {
-// 	std::istringstream iss (s.c_str ());
-// 	Real dummy;
-// 	iss >> std::noskipws >> dummy;
-// 	if (!(iss && iss.eof ())) {
-//         std::stringstream err;
-//         err << "invalid argument " << s;
-//         throw std::runtime_error (err.str ());
-//     }
-//     return atof (s.c_str ());
-// }
-// template <char op>
-// std::string fn_binop (AtomPtr b,  Namespace& nspace) {
-//     check_args ("bin_op", b, 2);
-//     std::stringstream val;
-//     Real first = to_number (b.at (0)); 
-//     Real second = to_number (b.at (1));
-//     switch (op) {
-//         case '+':  val << first + second;  break;
-//         case '-':  val << first - second;  break;
-//         case '*':  val << first * second;  break;
-//         case '/':  val << first / second;  break;
-//         case '<':  val << (first < second);  break;
-//         case '>':  val << (first > second);  break;
-//         case 'L':  val << (first <= second);  break;
-//         case 'G':  val << (first >= second);  break;
-//         case '=':  val << (first == second);  break;
-//     }
-//     return val.str ();
-// }
+Real to_number (const std::string& s) {
+	std::istringstream iss (s.c_str ());
+	Real dummy;
+	iss >> std::noskipws >> dummy;
+	if (!(iss && iss.eof ())) {
+        std::stringstream err;
+        err << "invalid argument " << s;
+        throw std::runtime_error (err.str ());
+    }
+    return atof (s.c_str ());
+}
+template <char op>
+AtomPtr fn_binop (AtomPtr b,  AtomPtr env) {
+    // check_args ("bin_op", b, 2);
+    std::stringstream val;
+    Real first = to_number (b->block.at (0)->token); 
+    Real second = to_number (b->block.at (1)->token);
+    switch (op) {
+        case '+':  val << first + second;  break;
+        case '-':  val << first - second;  break;
+        case '*':  val << first * second;  break;
+        case '/':  val << first / second;  break;
+        case '<':  val << (first < second);  break;
+        case '>':  val << (first > second);  break;
+        case 'L':  val << (first <= second);  break;
+        case 'G':  val << (first >= second);  break;
+        case '=':  val << (first == second);  break;
+    }
+    return Atom::make_element(val.str ());
+}
 // std::string load (const std::string& name, Namespace& nspace) {
 // 	std::ifstream in (name.c_str ());
 // 	if (!in.good ()) {
@@ -283,12 +334,22 @@ std::string fn_puts (AtomPtr b, Namespace& nspace) {
 // }
 
 // interface
-void init_namespace (Namespace& nspace) {
-    nspace.functors["puts"] = fn_puts;
+void add_func (const std::string& name, Functor f, int minargs, AtomPtr env) {
+	AtomPtr op = Atom::make_functor (f, minargs); 
+	op->token = name;
+	extend (Atom::make_element (name), op, env);
+}
+
+AtomPtr make_env () {
+	AtomPtr env = Atom::make_sequence ();
+	env->block.push_back (Atom::make_sequence ()); // parent
+
+    add_func("puts", fn_puts, 0, env);
+    add_func("set", fn_set, 2, env);
+    add_func("\\", fn_lambda<false>, 2, env);
     // nspace.functors["load"] = fn_load;
-    // nspace.functors["set"] = fn_set;
     // nspace.functors["proc"] = fn_proc;
-    // nspace.functors["+"] = fn_binop<'+'>;
+    add_func("+", fn_binop<'+'>, 2, env);
     // nspace.functors["-"] = fn_binop<'-'>;
     // nspace.functors["*"] = fn_binop<'*'>;
     // nspace.functors["/"] = fn_binop<'/'>;
@@ -299,12 +360,14 @@ void init_namespace (Namespace& nspace) {
     // nspace.functors["=="] = fn_binop<'='>;
 
     // nspace.variables["nl"] = "\n";
+    return env;
 }
-void repl (std::istream& in, Namespace& nspace) {
+void repl (std::istream& in, AtomPtr env) {
     while (true) { 
         std::cout << ">> ";
         try {
-            std::cout << eval (in, nspace) << std::endl;
+            print (eval (read (in), env), std::cout) << std::endl;
+            //print (read (in), std::cout) << std::endl;
         } catch (std::exception& err) {
             std::cout << "error: " << err.what () << std::endl;
         }
@@ -312,4 +375,4 @@ void repl (std::istream& in, Namespace& nspace) {
 }
 
 
-#endif // SKICL_H
+#endif // SKICL_H	
