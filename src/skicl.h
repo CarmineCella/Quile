@@ -147,32 +147,18 @@ void error (const std::string& err, AtomPtr node) {
 }
 AtomPtr read (std::istream& input, const std::string& terminator = "\n") {
 	AtomPtr code = Atom::make_sequence (true); // executable
+	std::cout << "term :" << terminator << ":" << std::endl;
 	while (!input.eof ()) {
 		std::string token = get_token (input);
 		if (token.size() == 0) continue;
-		if (token == "\n") break;
+		if (token == terminator) break;
 		if (token == "[" || token == "{") {
 			std::string valid_terminator = "]";	std::string invalid_terminator = "}";
 			if (token == "{") valid_terminator = "}"; invalid_terminator = ")";
 			AtomPtr list = Atom::make_sequence(token == "[");
-			while (!input.eof ()) {
-				AtomPtr ct = read(input, valid_terminator);
-				list->block.push_back (ct);
-				if (ct->block.size () > 0 && 
-					ct->block.at(ct->block.size () - 1)->token == invalid_terminator) {
-					error ("illegal terminator used in ", list);
-				}
-				print  (ct, std::cout) << std::endl;
-				std::cout << valid_terminator << "----" << std::endl;
-				if (ct->block.size () > 0 && 
-					ct->block.at (ct->block.size () - 1)->token == valid_terminator) {
-					ct->block.pop_back();
-					break;
-				} 
-			}
-
-			code->block.push_back(list);
-			return code;
+			AtomPtr ct = read(input, valid_terminator);
+			// FIXME: cut with \n
+			code->block.push_back(ct);
 		} else {
 			AtomPtr s = Atom::make_element (token);
 			code->block.push_back(s);
@@ -241,7 +227,7 @@ AtomPtr eval (AtomPtr node, AtomPtr env) {
 std::ostream& print (AtomPtr node, std::ostream& out) {
 	switch (node->type) {
 		case ELEMENT:
-			out << ":"<< node->token <<":";
+			out << node->token;
 		break;
 		case LIST: case COLL:
 			out << (node->type == LIST ? "[" : "{");
@@ -366,8 +352,8 @@ void repl (std::istream& in, AtomPtr env) {
     while (true) { 
         std::cout << ">> ";
         try {
-            print (eval (read (in), env), std::cout) << std::endl;
-            //print (read (in), std::cout) << std::endl;
+            //print (eval (read (in), env), std::cout) << std::endl;
+            print (read (in), std::cout) << std::endl;
         } catch (std::exception& err) {
             std::cout << "error: " << err.what () << std::endl;
         }
