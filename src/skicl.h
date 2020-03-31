@@ -139,7 +139,7 @@ std::string get_token (std::istream& input) {
 			break;
 		    case '#':
 				while (c != '\n' && !input.eof ())  { c = input.get (); }
-                input.unget();
+                if (c == '\n') input.unget();
 			break;            
 			case ' ': case '\t': case '\r':
 				if (accum.str ().size ()) return accum.str ();
@@ -231,7 +231,7 @@ AtomPtr extend (AtomPtr key, AtomPtr val, AtomPtr env, bool recurse = false) {
 	for (unsigned i = 1; i <= env->block.size () / 2; ++i) {
 		if (atom_eq (env->block.at (2 * i - 1), key)) {
 			std::cout <<  "**** " << (std::hex) << env->block.at (2 * i) << " " << (std::hex) << val << std::endl;
-			*env->block.at (2 * i) = *val; 
+			*env->block.at (2 * i) =  *val; 
 			return val;
 		}
 	}
@@ -263,7 +263,11 @@ tail_call:
     if (cmd->type == PROC) {
 		AtomPtr args = cmd->block.at (0);
 		AtomPtr body = cmd->block.at (1);
+		std::cout << std::endl << std::endl;
+		puts (cmd->block.at (2), std::cout) << " ----------->" << std::endl;
+		std::cout << is_null(cmd->block.at (2)) << std::endl;
 		AtomPtr closure = is_null (cmd->block.at (2)) ? env : cmd->block.at (2);
+		puts (closure, std::cout) << " ----------->" << std::endl;
 		AtomPtr nenv = Atom::make_sequence ();
 		nenv->block.push_back(closure);
 		int minargs = args->block.size () < params->block.size () ? args->block.size () 
