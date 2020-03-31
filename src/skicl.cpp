@@ -13,7 +13,7 @@ int main (int argc, char* argv[]) {
 	    AtomPtr env = make_env ();
 		if (argc > 1) {
 			for (unsigned i = 1; i < argc; ++i) {
-				// string res = load (argv[i], env);
+				source (argv[i], env);
 			}
 		} else {
 			cout << "[skicl, ver 0.1]" << endl << endl;
