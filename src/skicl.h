@@ -14,7 +14,7 @@
 #include <variant>
 #include <regex>
 
-// TODO: primitive, if, while, uplevel, eval, serializzazione, test
+// TODO: primitive, if, eval, serializzazione, test
 // speed, return, break, continue
 
 // ast
@@ -89,23 +89,12 @@ bool is_null (AtomPtr node) {
 		((node->type == AtomType::COLL || node->type == AtomType::LIST) 
 			&& node->block.size () == 0);
 }
-AtomPtr split_sequence (AtomPtr ct) {
-	AtomPtr outer = Atom::make_sequence(ct->type == LIST);
-	AtomPtr inner = Atom::make_sequence(true); // always executable
-	for (unsigned t = 0; t < ct->block.size ();  ++t) {
-		if (ct->block.at(t)->token == "\n") {
-			if (!is_null (inner)) outer->block.push_back(inner);
-			inner = Atom::make_sequence(true);
-		} else inner->block.push_back(ct->block.at(t));
-	}
-	if (!is_null (inner)) outer->block.push_back(inner);
-	return outer;
-}
 int atom_eq (AtomPtr x, AtomPtr y) {
 	if (x->type != y->type) return 0;
 	switch (x->type) {
 	    case AtomType::NUMBER: return (x->value == y->value);
-    	case AtomType::SYMBOL: case AtomType::STRING: return (x->token == y->token);
+    	case AtomType::SYMBOL: return (x == y);
+    	case AtomType::STRING: return (x->token == y->token);
 	    case AtomType::COLL: case AtomType::LIST:  {
 			if (x->block.size () != y->block.size ()) { return 0; }
 			for (unsigned i = 0; i < x->block.size (); ++i) {
@@ -178,7 +167,7 @@ AtomPtr args_check (AtomPtr node, unsigned ct, AtomPtr ctx = Atom::make_sequence
 	}
 	return node;
 }
-AtomPtr type_check (AtomPtr node, AtomType type) {
+AtomPtr type_check (AtomPtr node, AtomType type, AtomPtr ctx) {
 	if (is_null (node)) return node;
 	if (node->type != type) {
 		std::stringstream err;
@@ -186,7 +175,7 @@ AtomPtr type_check (AtomPtr node, AtomType type) {
 		err << TYPE_NAMES[static_cast<typename 	std::underlying_type<AtomType>::type>(node->type)];
 		err << " (expected " << TYPE_NAMES[static_cast<typename 
 		std::underlying_type<AtomType>::type>(type)] << ") in";
-		error (err.str (), node);
+		error (err.str (), ctx);
 	}
 	return node;
 }
@@ -205,7 +194,7 @@ AtomPtr gets (std::istream& input, const std::string& terminator = "\n") {
 		if (token == "[" || token == "{") {
 			std::string valid_terminator = "]";
 			if (token == "{") valid_terminator = "}"; 
-				code->block.push_back(gets(input, valid_terminator));
+			code->block.push_back(gets(input, valid_terminator));
 		} else if (is_number (token)) {
 			code->block.push_back(Atom::make_number(atof (token.c_str ())));
 		} else if (is_string (token)) {
@@ -230,17 +219,31 @@ AtomPtr assoc (const std::string& sym, AtomPtr env) {
 AtomPtr extend (AtomPtr key, AtomPtr val, AtomPtr env, bool recurse = false) {
 	for (unsigned i = 1; i <= env->block.size () / 2; ++i) {
 		if (atom_eq (env->block.at (2 * i - 1), key)) {
-			std::cout <<  "**** " << (std::hex) << env->block.at (2 * i) << " " << (std::hex) << val << std::endl;
-			*env->block.at (2 * i) =  *val; 
+			env->block.at (2 * i) = val;
 			return val;
 		}
 	}
 	if (recurse) {
 		if (!is_null(env->block.at(0))) return extend(key, val, env->block.at(0), recurse);
+		else error ("unbound identifier", key);
 	} 
 	env->block.push_back (key); env->block.push_back (val);
 	return val;
 }
+AtomPtr split_sequence (AtomPtr ct) {
+	AtomPtr outer = Atom::make_sequence(ct->type == LIST);
+	AtomPtr inner = Atom::make_sequence(true); // always executable
+	for (unsigned t = 0; t < ct->block.size ();  ++t) {
+		if (ct->block.at(t)->token == "\n") {
+			if (!is_null (inner)) outer->block.push_back(inner);
+			inner = Atom::make_sequence(true);
+		} else inner->block.push_back(ct->block.at(t));
+	}
+	if (!is_null (inner)) outer->block.push_back(inner);
+	return outer;
+}
+AtomPtr fn_eval (AtomPtr b,  AtomPtr env) { return nullptr; } // dummy
+AtomPtr fn_if (AtomPtr b,  AtomPtr env) { return nullptr; } // dummy
 AtomPtr eval (AtomPtr node, AtomPtr env) {
 tail_call:
     if (is_null (node)) return Atom::make_sequence();
@@ -257,19 +260,16 @@ tail_call:
     		else params->block.push_back(c);
     	}
     }
+
     if (params->block.size () == 0) return Atom::make_sequence();
-    AtomPtr cmd = assoc (type_check(params->block.at (0), AtomType::SYMBOL)->token, env);
+    AtomPtr cmd = assoc (type_check(params->block.at (0), AtomType::SYMBOL, node)->token, env);
     params->block.pop_front ();
     if (cmd->type == PROC) {
 		AtomPtr args = cmd->block.at (0);
-		AtomPtr body = cmd->block.at (1);
-		std::cout << std::endl << std::endl;
-		puts (cmd->block.at (2), std::cout) << " ----------->" << std::endl;
-		std::cout << is_null(cmd->block.at (2)) << std::endl;
+		AtomPtr code = cmd->block.at (1);
 		AtomPtr closure = is_null (cmd->block.at (2)) ? env : cmd->block.at (2);
-		puts (closure, std::cout) << " ----------->" << std::endl;
 		AtomPtr nenv = Atom::make_sequence ();
-		nenv->block.push_back(closure);
+		nenv->block.push_back(closure);	
 		int minargs = args->block.size () < params->block.size () ? args->block.size () 
 			: params->block.size ();
 		for (unsigned i = 0; i < minargs; ++i) {
@@ -281,7 +281,7 @@ tail_call:
 			for (unsigned i = minargs; i < args->block.size (); ++i) {
 				args_cut->block.push_back (args->block.at (i));
 			}
-			return Atom::make_lambda (args_cut, body, nenv);
+			return Atom::make_lambda (args_cut, code, nenv);
 		}			
 		// variable arguments
 		AtomPtr varargs = Atom::make_sequence();
@@ -289,14 +289,32 @@ tail_call:
 			varargs->block.push_back (params->block.at(i));
 		} 		
 		extend (Atom::make_symbol("&"), varargs, nenv);
-		for (unsigned i = 0; i < body->block.size () - 1; ++i) {
-			eval (body->block.at (i), nenv);
+		for (unsigned i = 0; i < code->block.size () - 1; ++i) {
+			eval (code->block.at (i), nenv);
 		}
 		env = nenv;
-		node = body->block.at (body->block.size () - 1); // tail recursion
+		node = code->block.at (code->block.size () - 1); // tail recursion
 		goto tail_call;
     } else if (cmd->type == BUILTIN) {
     	args_check(params, cmd->minargs, node);
+    	if (cmd->func == &fn_if) {
+    		AtomPtr code = split_sequence (params->block.at (1));
+    		if (type_check (eval (params->block.at (0), env), 
+    			AtomType::NUMBER, node)->value) {
+				for (unsigned i = 0; i < code->block.size () - 1; ++i) {
+					eval (code->block.at (i), env);
+				}
+				node = code->block.at (code->block.size () - 1); // tail recursion
+				goto tail_call;
+			} else return Atom::make_sequence();		
+		} else if (cmd->func == &fn_eval) {
+    		AtomPtr code = split_sequence (params->block.at (0));
+			for (unsigned i = 0; i < code->block.size () - 1; ++i) {
+				eval (code->block.at (i), env);
+			}
+			node = code->block.at (code->block.size () - 1); // tail recursion
+			goto tail_call;
+		}
     	return cmd->func (params, env);
     } else error ("function expected in", cmd);
     return Atom::make_sequence();
@@ -319,13 +337,15 @@ std::ostream& puts (AtomPtr node, std::ostream& out) {
 			out << (node->type == LIST ? "]" : "}");
 		break;
 		case PROC:
-			if (node->block.size () < 2) return out;
-			puts (node->block.at (0), out) << std::endl;
+			if (node->block.size () < 3) return out;
+			if (is_null (node->block.at (2))) out << "<dynamic> ";
+			else out << "<static> ";
+			puts (node->block.at (0), out) << " ";
 			puts (node->block.at (1), out) << std::endl;
 		break;
 		case BUILTIN: 
-			out << "<" << (std::hex) << &node->func << ", " 
-				<< node->minargs << " min args>";
+			out << "<" << (std::hex) << &node->func << ", min args: " 
+				<< node->minargs << ">";
 		break;
 	}
 	return out;
@@ -336,31 +356,43 @@ AtomPtr fn_puts (AtomPtr b, AtomPtr env) {
     }
     return Atom::make_symbol("");
 }
+template <bool recurse>
 AtomPtr fn_set (AtomPtr b,  AtomPtr env) {
-    return extend (type_check (b->block.at (0), AtomType::SYMBOL), b->block.at (1), env);
+	AtomPtr res = Atom::make_sequence();
+    for (unsigned i  = 0; i < b->block.size () / 2; ++i) {
+    	res = extend (type_check (b->block.at (2 * i), AtomType::SYMBOL, b), 
+    		b->block.at (2 * i + 1), env, recurse);
+    }
+    return res;
 }
-AtomPtr fn_upvar (AtomPtr b,  AtomPtr env) {
-	if (is_null (env->block.at (0))) error ("cannot use upvar in the outer enviroment ", nullptr);
-    AtomPtr ref = Atom::make_sequence();
-    try {
-    	ref = assoc(b->block.at (0)->token, env); // get ref
-	} catch (...) {
-		ref = extend(type_check (b->block.at (0), AtomType::SYMBOL), 
-			Atom::make_sequence(), env->block.at (0)); // define upper
-	} 
-    return extend (type_check (b->block.at (1), AtomType::SYMBOL), ref, env);
+AtomPtr fn_updef (AtomPtr b,  AtomPtr env) {
+	if (is_null(env->block.at (0))) error ("cannot use updef in outer environment", env);
+	return extend (type_check (b->block.at (0), AtomType::SYMBOL, b), 
+		b->block.at (1), env->block.at (0));
 }
 template <bool dynamic>
 AtomPtr fn_lambda (AtomPtr n, AtomPtr env) {
-	return Atom::make_lambda (type_check (n->block.at (0), AtomType::COLL), 
-		split_sequence (type_check (n->block.at (1), AtomType::COLL)),
+	// AtomPtr closure = Atom::make_sequence();
+	// *closure = *env;
+	return Atom::make_lambda (type_check (n->block.at (0), AtomType::COLL, n), 
+		split_sequence (type_check (n->block.at (1), AtomType::COLL, n)),
 		dynamic ? Atom::make_sequence () : env);	
+}
+AtomPtr fn_while (AtomPtr b,  AtomPtr env) {
+	AtomPtr res = Atom::make_sequence();
+	AtomPtr code = split_sequence (type_check (b->block.at (1), AtomType::COLL, b));
+	while (type_check (eval (b->block. at (0), env), AtomType::NUMBER, b)->value) {
+		for (unsigned i = 0; i < code->block.size (); ++i) {
+			eval (code->block.at (i), env);
+		}
+	}
+	return res;
 }
 template <char op>
 AtomPtr fn_binop (AtomPtr b,  AtomPtr env) {
     Real val = 0;
-    Real first = type_check (b->block.at (0), AtomType::NUMBER)->value; 
-    Real second = type_check (b->block.at (1), AtomType::NUMBER)->value;
+    Real first = type_check (b->block.at (0), AtomType::NUMBER, b)->value; 
+    Real second = type_check (b->block.at (1), AtomType::NUMBER, b)->value;
     switch (op) {
         case '+':  val = first + second;  break;
         case '-':  val = first - second;  break;
@@ -402,8 +434,12 @@ AtomPtr make_env () {
 	AtomPtr env = Atom::make_sequence ();
 	env->block.push_back (Atom::make_sequence ()); // parent
     add_builtin("puts", fn_puts, 1, env);
-    add_builtin("set", fn_set, 2, env);
-    add_builtin("upvar", fn_upvar, 2, env);
+    add_builtin("set", fn_set<false>, 2, env);
+    add_builtin("setrec", fn_set<true>, 2, env);
+    add_builtin("updef", fn_updef, 2, env);
+    add_builtin("eval", fn_eval, 1, env);
+    add_builtin("if", fn_if, 2, env);
+    add_builtin("while", fn_while, 2, env);
     add_builtin("\\", fn_lambda<false>, 2, env);
     add_builtin("@", fn_lambda<true>, 2, env);
     add_builtin("source", fn_source, 1, env);
