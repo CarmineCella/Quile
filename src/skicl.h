@@ -14,8 +14,7 @@
 #include <variant>
 #include <regex>
 
-// TODO: primitive, if, eval, serializzazione, test
-// speed, return, break, continue
+// TODO: primitive, serializzazione, test speed, core lib
 
 // ast
 struct Atom;
@@ -185,16 +184,20 @@ bool is_number (std::string token) {
 bool is_string (const std::string& s) {
 	return s.find ("\"") != std::string::npos;
 }
-AtomPtr gets (std::istream& input, const std::string& terminator = "\n") {
+AtomPtr gets (std::istream& input, int& nesting, const std::string& terminator) {
 	AtomPtr code = Atom::make_sequence (terminator != "}");
 	while (!input.eof ()) {
 		std::string token = get_token (input);
 		if (token.size() == 0) continue;
-		if (token == terminator) break;
+		if (token == terminator) {
+			--nesting;
+			break;
+		}
 		if (token == "[" || token == "{") {
+			++nesting;
 			std::string valid_terminator = "]";
 			if (token == "{") valid_terminator = "}"; 
-			code->sequence.push_back(gets(input, valid_terminator));
+			code->sequence.push_back(gets(input, nesting, valid_terminator));
 		} else if (is_number (token)) {
 			code->sequence.push_back(Atom::make_number(atof (token.c_str ())));
 		} else if (is_string (token)) {
@@ -204,6 +207,12 @@ AtomPtr gets (std::istream& input, const std::string& terminator = "\n") {
 		}
 	}
 	return code;
+}
+AtomPtr gets (std::istream& input) {
+	int nesting = 1;
+	AtomPtr r = gets (input, nesting, "\n");
+	if (nesting && !is_null (r)) error ("invalid nesting in", r);
+	return r;
 }
 AtomPtr assoc (const std::string& sym, AtomPtr env) {
 	AtomPtr r = Atom::make_sequence ();;
@@ -262,7 +271,9 @@ tail_call:
     }
 
     if (params->sequence.size () == 0) return Atom::make_sequence();
-    AtomPtr cmd = assoc (type_check(params->sequence.at (0), AtomType::SYMBOL, node)->token, env);
+    AtomPtr cmd = params->sequence.at (0);
+    if (cmd->type == AtomType::SYMBOL) cmd = assoc (cmd->token, env);
+
     params->sequence.pop_front ();
     if (cmd->type == PROC) {
 		AtomPtr args = cmd->sequence.at (0);
@@ -441,10 +452,26 @@ AtomPtr fn_while (AtomPtr b,  AtomPtr env) {
 	AtomPtr code = split_sequence (type_check (b->sequence.at (1), AtomType::LIST, b));
 	while (type_check (eval (b->sequence. at (0), env), AtomType::NUMBER, b)->value) {
 		for (unsigned i = 0; i < code->sequence.size (); ++i) {
-			eval (code->sequence.at (i), env);
+			res = eval (code->sequence.at (i), env);
+			if (res->token == "continue") ++i;
+			if (res->token == "break"){		
+				return res;	
+			} 				
 		}
 	}
 	return res;
+}
+template <int command>
+AtomPtr fn_passby (AtomPtr b,  AtomPtr env) {
+	switch (command) {
+		case 0:
+			return Atom::make_symbol("continue");
+		break;
+		case 1:
+			return Atom::make_symbol("break");
+		break;
+	}
+	return Atom::make_sequence();
 }
 template <char op>
 AtomPtr fn_binop (AtomPtr b,  AtomPtr env) {
@@ -504,6 +531,8 @@ AtomPtr make_env () {
     add_builtin("eval", fn_eval, 1, env);
     add_builtin("if", fn_if, 2, env);
     add_builtin("while", fn_while, 2, env);
+    add_builtin("continue", fn_passby<0>, 0, env);
+    add_builtin("break", fn_passby<1>, 0, env);
 	// sequences
 	add_builtin ("list", fn_list, 0, env);
 	add_builtin ("join", fn_join, 1, env);
@@ -532,7 +561,7 @@ void repl (std::istream& in, AtomPtr env) {
         std::cout << "% ";
         try {
             puts (eval (gets (in), env), std::cout) << std::endl;
-            // puts (gets (in), std::cout) << std::endl;
+            // puts (gets (in, nesting), std::cout) << std::endl;
         } catch (std::exception& err) {
             std::cout << "error: " << err.what () << std::endl;
         }
