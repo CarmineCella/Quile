@@ -478,6 +478,12 @@ AtomPtr fn_list (AtomPtr node, AtomPtr env) {
 	return node;
 }
 AtomPtr fuse (AtomPtr dst, AtomPtr ll) {
+	// if (ll->type == AtomType::LIST) {
+	// 	for (unsigned i = 0; i < ll->sequence.size (); ++i) {
+	// 		dst->sequence.push_back (ll->sequence.at (i));
+	// 	}
+	// } else dst->sequence.push_back (ll);
+	// return dst;
 	if (ll->type == AtomType::LIST) {
 		for (unsigned i = 0; i < ll->sequence.size (); ++i) {
 			AtomPtr flatten = Atom::make_sequence();
@@ -511,6 +517,13 @@ AtomPtr fn_lrange (AtomPtr params, AtomPtr env) {
 AtomPtr fn_llength (AtomPtr params, AtomPtr env) {
 	AtomPtr l = type_check (params->sequence.at (0), AtomType::LIST, params);
 	return Atom::make_number (l->sequence.size ());
+}
+AtomPtr fn_lappend (AtomPtr params, AtomPtr env) {
+	AtomPtr l = type_check (params->sequence.at (0), AtomType::LIST, params);
+	for (unsigned i = 1; i < params->sequence.size (); ++i) {
+		l->sequence.push_back(params->sequence.at (i));
+	}
+	return l;
 }
 AtomPtr fn_while (AtomPtr b,  AtomPtr env) {
 	AtomPtr res = Atom::make_sequence();
@@ -774,6 +787,7 @@ AtomPtr make_env () {
 	add_builtin ("lindex", fn_lindex, 1, env);
 	add_builtin ("lrange", fn_lrange, 2, env);
 	add_builtin ("llength", fn_llength, 1, env);
+	add_builtin ("lappend", fn_lappend, 1, env);
     // flow control
     add_builtin("eval", fn_eval, 1, env);
     add_builtin("if", fn_if, 2, env);
