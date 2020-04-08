@@ -34,9 +34,9 @@ int main (int argc, char* argv[]) {
 			cout << BOLDBLUE << "[" << *PACKAGE << ", version "
 				<< *VERSION <<"]" << RESET << endl << endl;
 
-			cout << "functional language" << endl;
+			cout << "programming language" << endl;
 			cout << "(c) 2020, www.skicl.org" << endl << endl;
-			cout << "Ctrl-C or (quit) to terminate" << endl << endl;
+			cout << "Ctrl-C or (exit) to terminate" << endl << endl;
 
 			repl (env, cin, cout);
 		} else {
