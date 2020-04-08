@@ -12,9 +12,7 @@ Skicl includes several advanced features among which:
 * homoiconicity
 * partial evaluation
 * tail recursion
-* static or dynamic scoping
+* static and dynamic scoping
 * lambda functions
-
-
 
 (c) 2020 by Carmine E. Cella, www.carminecella.com
