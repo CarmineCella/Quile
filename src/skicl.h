@@ -13,8 +13,16 @@
 #include <map>
 #include <variant>
 #include <regex>
+#include <cmath>
+#include <dlfcn.h>
+#if defined (ENABLE_READLINE)
+	#include <readline/readline.h>
+	#include <readline/history.h>
+#endif
 
-// TODO: primitive, serializzazione, test speed, core lib
+#define BOLDBLUE    "\033[1m\033[34m"
+#define RED     	"\033[31m" 
+#define RESET   	"\033[0m"
 
 // ast
 struct Atom;
@@ -139,7 +147,7 @@ std::string get_token (std::istream& input) {
 	                c = input.get ();
 	                accum << c;
 	            } while (c != '\"' && !input.eof ());
-				return accum.str ().substr(1, accum.str ().size ()  - 2); 
+				return accum.str (); //.substr(1, accum.str ().size ()  - 2); 
 			break;             
 			default:
 				if (c > 0) accum << c;
@@ -149,13 +157,13 @@ std::string get_token (std::istream& input) {
 }
 
 // parsing and evaluation
-std::ostream& puts (AtomPtr node, std::ostream& out);
+std::ostream& puts (AtomPtr node, std::ostream& out, bool is_write);
 void error (const std::string& err, AtomPtr node) {
 	std::stringstream tmp;
 	tmp << err;
 	if (node) {
 		std::stringstream tmp2;
-		puts (node, tmp2);
+		puts (node, tmp2, false);
 		tmp << " " << tmp2.str ();
 	}
 	throw std::runtime_error (tmp.str ());
@@ -179,7 +187,7 @@ AtomPtr type_check (AtomPtr node, AtomType type, AtomPtr ctx) {
 	return node;
 }
 bool is_number (std::string token) {
-    return std::regex_match(token, std::regex (("((\\+|-)?[[:digit:]]+)(\\.(([[:digit:]]+)?))?" )));
+    return std::regex_match(token, std::regex (("((\\+|-)?[[:digit:]]+)(\\.(([[:digit:]]+)?))?")));
 }
 bool is_string (const std::string& s) {
 	return s.find ("\"") != std::string::npos;
@@ -264,6 +272,7 @@ tail_call:
     	} else {
 			if (c->token == "\n") continue;
 			else if (c->token[0] == '$') {
+				if (c->token.size () == 1) error ("missing variable name in", node);
 				params->sequence.push_back(assoc (c->token.substr(1, c->token.size ()-1), env));
 			}
     		else params->sequence.push_back(c);
@@ -312,7 +321,7 @@ tail_call:
     		bool has_else = false;
 			if (params->sequence.size () >  2) {
 				if  (params->sequence.at (2)->token != "else" || params->sequence.size () != 4) {
-					error ("if/else syntax error in ", node);
+					error ("invalid if/else syntax in ", node);
 				}    		
 				has_else = true;
 			}
@@ -348,40 +357,37 @@ tail_call:
 }
 
 // builtins
-std::ostream& puts (AtomPtr node, std::ostream& out) {
+std::ostream& puts (AtomPtr node, std::ostream& out, bool is_write = false) {
 	switch (node->type) {
 		case NUMBER:
 			out << node->value;
 		break;
 		case SYMBOL: case STRING:
-			out << node->token;
+			if (node->type == STRING && is_write ) out << "\"" << node->token << "\"";
+			else out << node->token;
 		break;
 		case STREAM: case LIST:
 			out << (node->type == STREAM ? "[" : "{");
 			for (unsigned i = 0; i < node->sequence.size (); ++i) {
-				puts (node->sequence.at (i), out) << " ";
+				puts (node->sequence.at (i), out, is_write) << " ";
 			}
 			out << (node->type == STREAM ? "]" : "}");
 		break;
 		case PROC:
 			if (node->sequence.size () < 3) return out;
-			if (is_null (node->sequence.at (2))) out << "<dynamic> ";
-			else out << "<static> ";
-			puts (node->sequence.at (0), out) << " ";
-			puts (node->sequence.at (1), out) << std::endl;
+			if (is_null (node->sequence.at (2))) out << "[@ ";
+			else out << "[\\ "; 
+			puts (node->sequence.at (0), out, is_write) << " ";
+			puts (node->sequence.at (1), out, is_write) << "]";
 		break;
 		case BUILTIN: 
-			out << "<" << (std::hex) << &node->func << ", min args: " 
-				<< node->minargs << ">";
+			if (is_write) {
+				out << "<" << (std::hex) << &node->func << ", min args: " 
+					<< node->minargs << ">";
+			} else out << node->token;
 		break;
 	}
 	return out;
-}
-AtomPtr fn_puts (AtomPtr b, AtomPtr env) {
-    for (unsigned i = 0; i < b->sequence.size (); ++i) {
-    	puts (b->sequence.at (i), std::cout);
-    }
-    return Atom::make_symbol("");
 }
 template <bool recurse>
 AtomPtr fn_set (AtomPtr b,  AtomPtr env) {
@@ -397,31 +403,81 @@ AtomPtr fn_updef (AtomPtr b,  AtomPtr env) {
 	return extend (type_check (b->sequence.at (0), AtomType::SYMBOL, b), 
 		b->sequence.at (1), env->sequence.at (0));
 }
+bool unset (AtomPtr k, AtomPtr env) {
+	for (std::deque<AtomPtr>::iterator it = env->sequence.begin(); it != env->sequence.end (); ++it) {
+		if (*it == k) {
+			env->sequence.erase(it);
+			env->sequence.erase(it);
+			return true;
+		}
+	}
+	if (!is_null(env->sequence.at(0))) return unset(k, env->sequence.at(0));
+	return false;
+}
+AtomPtr fn_unset (AtomPtr b,  AtomPtr env) {
+	for (unsigned i = 0; i < b->sequence.size (); ++i) {
+		if (!unset(b->sequence.at (i), env)) {
+			error ("unbound identifier in", b);
+		}	
+	}
+	return Atom::make_string("");
+}
 template <bool dynamic>
 AtomPtr fn_lambda (AtomPtr n, AtomPtr env) {
-	// AtomPtr closure = Atom::make_sequence();
-	// *closure = *env;
 	return Atom::make_lambda (type_check (n->sequence.at (0), AtomType::LIST, n), 
 		split_sequence (type_check (n->sequence.at (1), AtomType::LIST, n)),
 		dynamic ? Atom::make_sequence () : env);	
 }
+AtomPtr fn_info (AtomPtr b, AtomPtr env) {
+	std::string cmd = b->sequence.at (0)->token;
+	AtomPtr l = Atom::make_sequence();
+	std::regex r;
+	if (cmd == "vars") {
+		if (b->sequence.size () > 1) {
+			r.assign (b->sequence.at(1)->token);
+		} else r.assign (".*");
+		for (unsigned i = 1; i <= env->sequence.size () / 2; ++i) {
+			std::string k = env->sequence.at (2 * i - 1)->token;
+			if (std::regex_match(k, r)) {
+				l->sequence.push_back(Atom::make_symbol(k));
+			}
+		}
+    } else if (cmd == "exists") {
+    	for (unsigned i = 1; i < b->sequence.size (); ++i) {
+			std::string key = b->sequence.at (i)->token;		
+			Real ans = 1;
+			try {
+				AtomPtr r = assoc (key, env);
+			} catch (...) {
+				ans = 0;
+			}    	
+			l->sequence.push_back(Atom::make_number(ans));
+		}
+	} else if (cmd == "typeof") {
+    	for (unsigned i = 1; i < b->sequence.size (); ++i) {
+			l->sequence.push_back(Atom::make_symbol(TYPE_NAMES[b->sequence.at (i)->type]));
+		}
+	} else {
+		error ("invalid info request", b->sequence.at (0));
+	}
+    return l;
+}
 AtomPtr fn_list (AtomPtr node, AtomPtr env) {
 	return node;
 }
-AtomPtr join (AtomPtr dst, AtomPtr ll) {
+AtomPtr fuse (AtomPtr dst, AtomPtr ll) {
 	if (ll->type == AtomType::LIST) {
 		for (unsigned i = 0; i < ll->sequence.size (); ++i) {
-			dst->sequence.push_back (ll->sequence.at (i));
+			AtomPtr flatten = Atom::make_sequence();
+			dst = fuse (dst, ll->sequence.at (i));
 		}
 	} else dst->sequence.push_back (ll);
 	return dst;
 }
-AtomPtr fn_join (AtomPtr n, AtomPtr env) {
+AtomPtr fn_fuse (AtomPtr n, AtomPtr env) {
 	AtomPtr dst = n->sequence.at(0);
-	for (unsigned i = 1; i < n->sequence.size (); ++i){
-		dst = join (dst, n->sequence.at(i));
-	}	
-	return dst;
+	n->sequence.pop_front ();
+	return fuse (dst, n);
 }
 AtomPtr fn_lindex (AtomPtr params, AtomPtr env) {
 	AtomPtr l = type_check (params->sequence.at (0), AtomType::LIST, params);
@@ -443,9 +499,6 @@ AtomPtr fn_lrange (AtomPtr params, AtomPtr env) {
 AtomPtr fn_llength (AtomPtr params, AtomPtr env) {
 	AtomPtr l = type_check (params->sequence.at (0), AtomType::LIST, params);
 	return Atom::make_number (l->sequence.size ());
-}
-AtomPtr gets_fn (AtomPtr node, AtomPtr env) {
-	return gets (std::cin);
 }
 AtomPtr fn_while (AtomPtr b,  AtomPtr env) {
 	AtomPtr res = Atom::make_sequence();
@@ -473,26 +526,56 @@ AtomPtr fn_passby (AtomPtr b,  AtomPtr env) {
 	}
 	return Atom::make_sequence();
 }
-template <char op>
-AtomPtr fn_binop (AtomPtr b,  AtomPtr env) {
-    Real val = 0;
-    Real first = type_check (b->sequence.at (0), AtomType::NUMBER, b)->value; 
-    Real second = type_check (b->sequence.at (1), AtomType::NUMBER, b)->value;
-    switch (op) {
-        case '+':  val = first + second;  break;
-        case '-':  val = first - second;  break;
-        case '*':  val = first * second;  break;
-        case '/':  val =first / second;  break;
-        case '<':  val = (first < second);  break;
-        case '>':  val = (first > second);  break;
-        case 'L':  val = (first <= second);  break;
-        case 'G':  val = (first >= second);  break;
-        case '=':  val = (first == second);  break;
-    }
-    return Atom::make_number(val);
+AtomPtr fn_throw (AtomPtr node, AtomPtr env) {
+	// if (!node->sequence.at (0)->sequence.size ()) return Atom::make_sequence();
+	throw node->sequence.at (0);
+	return Atom::make_sequence ();;
 }
-AtomPtr fn_eq (AtomPtr n, AtomPtr env) {
-	return Atom::make_number(atom_eq (n->sequence.at(0), n->sequence.at(1)));
+AtomPtr fn_catch (AtomPtr node, AtomPtr env) { // not tail recursive
+	AtomPtr sig = node->sequence.at(0);
+	AtomPtr body = node->sequence.at(1);
+	AtomPtr catcher = node->sequence.at (2);
+	AtomPtr res = Atom::make_sequence ();
+	try {
+ 		res = eval (body, env);
+	} catch (AtomPtr& e) {
+		if (atom_eq (e, sig)) {
+			res = eval (catcher, env);
+		} else throw e;
+	}
+	return res;
+}
+template <int mode>
+AtomPtr fn_format (AtomPtr node, AtomPtr env) {
+	std::stringstream tmp;
+	for (unsigned i = mode == 2 ? 1 : 0; i < node->sequence.size (); ++i) {
+		puts (node->sequence.at (i), tmp, (mode == 2 ? true : false));
+	}
+	switch (mode) {
+		case 0:
+			std::cout << tmp.str ();
+			return Atom::make_string ("");
+		break;
+		case 1:
+			return Atom::make_string (tmp.str ());
+		break;
+		case 2:
+			std::string fname = type_check (node->sequence.at (0), AtomType::STRING, node)->token;
+			std::ofstream out (fname);
+			if (!out.good ()) return Atom::make_sequence ();
+			out << tmp.str ();
+			out.close ();
+			return Atom::make_number(1);
+		break;	
+	}
+}
+AtomPtr fn_gets(AtomPtr node, AtomPtr env) {
+	if (node->sequence.size ()) {
+		std::stringstream strtmp;
+		strtmp << type_check(node->sequence.at (0), AtomType::STRING, node)->token << std::endl;
+		return gets (strtmp);
+	}
+	else return gets (std::cin);
 }
 AtomPtr source (const std::string& name, AtomPtr env) {
 	std::ifstream in (name.c_str ());
@@ -509,15 +592,159 @@ AtomPtr source (const std::string& name, AtomPtr env) {
 	return res;
 }
 AtomPtr fn_source (AtomPtr b,  AtomPtr env) {
-    return source (b->sequence.at (0)->token, env);
+    return source (type_check (b->sequence.at (0), AtomType::STRING, b)->token, env);
+}
+#define MAKE_BINOP(op,name, unit)									\
+	AtomPtr name (AtomPtr n, AtomPtr env) {						\
+		if (n->sequence.size () == 1) {										\
+			return Atom::make_number(unit							\
+				op (type_check (n->sequence.at(0), AtomType::NUMBER, n)->value));								\
+		}															\
+		AtomPtr c = n;												\
+		Real s = (type_check (n->sequence.at(0), AtomType::NUMBER, n)->value);									\
+		for (unsigned i = 1; i < n->sequence.size (); ++i) {					\
+			s = s op type_check (n->sequence.at(i), AtomType::NUMBER, n)->value;								\
+		}															\
+		return Atom::make_number (s);								\
+	}			
+
+#define MAKE_CMPOP(op,fn_name) \
+	AtomPtr fn_name (AtomPtr n, AtomPtr env) { \
+		Real base = 1; \
+		for (unsigned i = 0; i < n->sequence.size () - 1; ++i) { \
+			if (!(type_check (n->sequence.at(i), AtomType::NUMBER, n)->value op \
+				type_check (n->sequence.at(i + 1), AtomType::NUMBER, n)->value)) { \
+				base = 0; \
+			} \
+		} \
+		return Atom::make_number (base); \
+	} \
+
+#define MAKE_SINGOP(op,fn_name) \
+	AtomPtr fn_name (AtomPtr n, AtomPtr env) { \
+		return Atom::make_number (op(type_check (n->sequence.at(0), AtomType::NUMBER, n)->value)); \
+	} \
+
+MAKE_BINOP(+,fn_add,0);
+MAKE_BINOP(-,fn_sub,0);
+MAKE_BINOP(*,fn_mul,1);
+MAKE_BINOP(/,fn_div,1);
+MAKE_CMPOP(<,fn_less);
+MAKE_CMPOP(>,fn_gt);
+MAKE_CMPOP(<=,fn_lesseq);
+MAKE_CMPOP(>=,fn_gteq);
+MAKE_SINGOP(sin, fn_sin);
+MAKE_SINGOP(cos,fn_cos);
+MAKE_SINGOP(log, fn_log);
+MAKE_SINGOP(exp, fn_exp);
+MAKE_SINGOP(fabs, fn_fabs);
+MAKE_SINGOP (sqrt,fn_sqrt);
+MAKE_SINGOP (floor, fn_floor);
+AtomPtr fn_eq (AtomPtr n, AtomPtr env) {
+	return Atom::make_number(atom_eq (n->sequence.at(0), n->sequence.at(1)));
+}
+void replace (std::string &s, std::string from, std::string to) {
+    int idx = 0;
+    int next;
+    while ((next = s.find (from, idx)) != std::string::npos) {
+        s.replace (next, from.size (), to);
+        idx = next + to.size ();
+    } 
+}
+AtomPtr fn_string (AtomPtr node, AtomPtr env) {
+	std::string cmd = node->sequence.at (0)->token;
+	AtomPtr l = Atom::make_sequence();
+	std::regex r;
+	if (cmd == "length") {
+		return Atom::make_number(type_check (node->sequence.at(1), AtomType::STRING, node)->token.size ());
+	} else if (cmd == "find") {
+		if (node->sequence.size () < 3) error ("invalid number of arguments in", node);
+		unsigned long pos = type_check (node->sequence.at(1), AtomType::STRING, node)->token.find (
+			type_check (node->sequence.at(2), AtomType::STRING, node)->token);
+		if (pos == std::string::npos) return Atom::make_number (-1);
+		else return Atom::make_number (pos);		
+    } else if (cmd == "range") {
+    	if (node->sequence.size () < 4) error ("invalid number of arguments in", node);
+		std::string tmp = type_check (node->sequence.at(1), AtomType::STRING, node)->token.substr(
+			type_check (node->sequence.at(2), AtomType::NUMBER, node)->value, 
+			type_check (node->sequence.at(3), AtomType::NUMBER, node)->value);
+		return Atom::make_string (tmp);		
+	} else if (cmd == "replace") {
+		if (node->sequence.size () < 4) error ("invalid number of arguments in", node);
+		std::string tmp = type_check (node->sequence.at(1), AtomType::STRING, node)->token;
+		replace (tmp,
+			type_check (node->sequence.at(2), AtomType::STRING, node)->token, 
+			type_check (node->sequence.at(3), AtomType::STRING, node)->token);
+		return Atom::make_string(tmp);
+	} else if (cmd == "regexp") {
+		if (node->sequence.size () < 3) error ("invalid number of arguments in", node);
+		std::string str = type_check (node->sequence.at(1), AtomType::STRING, node)->token;
+		std::regex r (type_check (node->sequence.at(2), AtomType::STRING, node)->token);
+	    std::smatch m; 
+	    std::regex_search(str, m, r);
+
+	    AtomPtr l = Atom::make_sequence();
+	    for(auto v: m) {
+	    	l->sequence.push_back (Atom::make_string (v.str()));
+	    }
+		return l;		
+	} else {
+		error ("invalid string request", node->sequence.at (0));
+	}
+    return l;
+}
+AtomPtr fn_exec (AtomPtr node, AtomPtr env) {
+	return Atom::make_number (system (
+		type_check (node->sequence.at(0), AtomType::STRING, node)->token.c_str ()));
 }
 
-// interface
+AtomPtr fn_exit (AtomPtr node, AtomPtr env) {
+	int ret = 0;
+	if (node->sequence.size ()) ret = (int) node->sequence.at (0)->value;
+	exit (ret);
+	return Atom::make_sequence ();
+}
 void add_builtin (const std::string& name, Builtin f, int minargs, AtomPtr env) {
 	AtomPtr op = Atom::make_builtin (f, minargs); 
 	op->token = name;
 	extend (Atom::make_symbol (name), op, env);
 }
+#define DECLFFI(name, f) \
+	AtomPtr name (AtomPtr node, AtomPtr env) { \
+		AtomPtr out = nullptr; 	\
+	 	f (node, env, out);\
+	 	return out;\
+	}
+
+AtomPtr fn_import (AtomPtr params, AtomPtr env) {
+		std::string name = getenv ("HOME");
+#ifdef __APPLE__
+		name += "/.skicl/" + type_check (params->sequence.at(0), AtomType::STRING, params)->token + ".so";
+#elif __linux
+		name += "/.skicl/" + type_check (params->sequence.at(0), AtomType::STRING, params)->token + ".so";
+#else
+		name += "/.skicl/" + type_check (params->sequence.at(0), AtomType::STRING.params)->token + ".dll";
+#endif
+	void* handle = dlopen (name.c_str (), RTLD_NOW);
+	if (!handle) {
+		error (dlerror (), params);
+	}
+	unsigned ct = 0;
+	for (unsigned i = 0; i < params->sequence.at(1)->sequence.size() / 2; ++i) {
+		Builtin f = (Builtin) dlsym (handle, 
+			type_check (params->sequence.at(1)->sequence.at(2 * i), AtomType::SYMBOL, params)->token.c_str ());
+		
+		if (f) {
+			add_builtin(params->sequence.at(1)->sequence.at(2 * i)->token, 
+				f, 
+				type_check (params->sequence.at(1)->sequence.at(2 * i + 1), AtomType::NUMBER, params)->value, env); // silent error
+			++ct;
+		}
+	}
+	return ct == 0 ? Atom::make_sequence() : Atom::make_number(ct); // number of proc imported
+}
+
+// interface
 AtomPtr make_env () {
 	AtomPtr env = Atom::make_sequence ();
 	env->sequence.push_back (Atom::make_sequence ()); // parent
@@ -525,47 +752,90 @@ AtomPtr make_env () {
     add_builtin("set", fn_set<false>, 2, env);
     add_builtin("setrec", fn_set<true>, 2, env);
     add_builtin("updef", fn_updef, 2, env);
+    add_builtin("unset", fn_unset, 0, env);
     add_builtin("\\", fn_lambda<false>, 2, env);
     add_builtin("@", fn_lambda<true>, 2, env);
+    add_builtin("info", fn_info, 1, env);
+	// sequences
+	add_builtin ("list", fn_list, 0, env);
+	add_builtin ("fuse", fn_fuse, 1, env);
+	add_builtin ("lindex", fn_lindex, 1, env);
+	add_builtin ("lrange", fn_lrange, 2, env);
+	add_builtin ("llength", fn_llength, 1, env);
     // flow control
     add_builtin("eval", fn_eval, 1, env);
     add_builtin("if", fn_if, 2, env);
     add_builtin("while", fn_while, 2, env);
     add_builtin("continue", fn_passby<0>, 0, env);
     add_builtin("break", fn_passby<1>, 0, env);
-	// sequences
-	add_builtin ("list", fn_list, 0, env);
-	add_builtin ("join", fn_join, 1, env);
-	add_builtin ("lindex", fn_lindex, 1, env);
-	add_builtin ("lrange", fn_lrange, 2, env);
-	add_builtin ("llength", fn_llength, 1, env);
+    add_builtin ("catch", fn_catch, 3, env);
+    add_builtin ("throw", fn_throw, 1, env);	
     //I/O
-    add_builtin("puts", fn_puts, 1, env);
+    add_builtin("puts", fn_format<0>, 1, env);
+    add_builtin("tostr", fn_format<1>, 1, env);    
+    add_builtin("save", fn_format<2>, 1, env);
+    add_builtin("gets", fn_gets, 0, env);
     add_builtin("source", fn_source, 1, env);
     extend(Atom::make_symbol("nl"), Atom::make_symbol("\n"), env);
     // arithmetics/logic
-    add_builtin("+", fn_binop<'+'>, 2, env);
-    add_builtin("-", fn_binop<'-'>, 2, env);
-    add_builtin("*", fn_binop<'*'>, 2, env);
-    add_builtin("/", fn_binop<'/'>, 2, env);
-    add_builtin("<", fn_binop<'<'>, 2, env);
-    add_builtin(">", fn_binop<'>'>, 2, env);
-    add_builtin("<=", fn_binop<'L'>, 2, env);
-    add_builtin(">=", fn_binop<'G'>, 2, env);
+	add_builtin ("+", fn_add, 1, env);
+	add_builtin ("-", fn_sub, 1, env);
+	add_builtin ("*", fn_mul, 1, env);
+	add_builtin ("/", fn_div, 1, env);
+	add_builtin ("<", fn_less, 1, env);
+	add_builtin (">", fn_gt, 1, env);
+	add_builtin ("<=", fn_lesseq, 1, env);
+	add_builtin (">=", fn_gteq, 1, env);	
+	add_builtin ("sin", fn_sin, 1, env);
+	add_builtin ("cos", fn_cos, 1, env);
+	add_builtin ("log", fn_log, 1, env);
+	add_builtin ("exp", fn_exp, 1, env);
+	add_builtin ("abs", fn_fabs, 1, env);
+	add_builtin ("sqrt", fn_sqrt, 1, env);
+	add_builtin ("floor", fn_floor, 1, env);    
     add_builtin("eq", fn_eq, 2, env);
     //others
+	add_builtin ("string", fn_string, 2, env);
+	add_builtin ("exec", fn_exec, 1, env);
+	add_builtin ("exit", fn_exit, 0, env);
+	add_builtin ("import", fn_import, 0, env);    
     return env;
 }
-void repl (std::istream& in, AtomPtr env) {
-    while (true) { 
-        std::cout << "% ";
-        try {
-            puts (eval (gets (in), env), std::cout) << std::endl;
-            // puts (gets (in, nesting), std::cout) << std::endl;
-        } catch (std::exception& err) {
-            std::cout << "error: " << err.what () << std::endl;
-        }
-    }  
+void repl (AtomPtr env, std::istream& in, std::ostream& out) {
+	int line = 0;
+	#if defined (ENABLE_READLINE)
+	char* line_read = 0;
+	#endif
+	std::istream* current = &in;
+	while (true){
+		#if defined (ENABLE_READLINE)
+			if (line_read) {
+				delete [] line_read;
+				line_read = 0;
+			}
+			line_read = readline ("> ");
+			if (!line_read) break;
+			if (line_read && *line_read) add_history (line_read);
+			std::string input (line_read);
+			if (!input.size ()) { continue; }
+			std::stringstream tmp_str; 
+			tmp_str << line_read << "\n"; // lf added
+			current = &tmp_str;
+		#else
+			out << "> ";
+		#endif	
+		try {
+			puts (eval (gets (*current), env), out);
+			out << std::endl;
+		} catch (std::exception& e) {
+			out << RED << "error: " << e.what () << RESET << std::endl;
+		} catch (AtomPtr& e) {
+			out << RED << "error: uncaught expection " << RESET;
+			puts (e, out); out << std::endl;
+		} catch (...) {
+			out << RED << "fatal error: execution stopped" << RESET << std::endl;
+		}
+	} 
 }
 
 // EOF

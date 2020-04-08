@@ -2,30 +2,60 @@
 //
 
 #include "skicl.h"
+
 #include <iostream>
-#include <string>
+#include <sstream>
+#include <signal.h>
 #include <stdexcept>
+#include <unistd.h>
 
 using namespace std;
 
-int main (int argc, char* argv[]) {
-	try {
-	    AtomPtr env = make_env ();
-		if (argc > 1) {
-			for (unsigned i = 1; i < argc; ++i) {
-				source (argv[i], env);
-			}
-		} else {
-			cout << "[skicl, ver 0.1]" << endl << endl;
-			cout << "a tiny tcl dialect" << endl;
-			cout << "(c) 2020, www.carminecella.com" << endl << endl;
-            repl (cin, env);
-		}
-	} catch (exception& e) {
-		cout << "error: " << e.what () << endl;
-	} catch (...) {
-		cout << "fatal error; quitting" << endl;
-	}
+const char* PACKAGE[] = {"skicl"};
+const char* VERSION[] = {"0.2"};
 
-    return 0;
+int main (int argc, char* argv[]) {
+	AtomPtr env = make_env (); // master environment
+
+	try {
+		bool interactive = false;
+		int opt = 0;
+		while ((opt = getopt(argc, argv, "i")) != -1) {
+		    switch (opt) {
+		    case 'i': interactive = true; break;
+		    default:
+		        std::stringstream msg;
+		        msg << "usage is " << argv[0] << " [-i] [file...]";
+		        throw runtime_error (msg.str ());
+		    }
+		}
+
+		if (argc - optind == 0) {
+			cout << BOLDBLUE << "[" << *PACKAGE << ", version "
+				<< *VERSION <<"]" << RESET << endl << endl;
+
+			cout << "functional language" << endl;
+			cout << "(c) 2020, www.skicl.org" << endl << endl;
+			cout << "Ctrl-C or (quit) to terminate" << endl << endl;
+
+			repl (env, cin, cout);
+		} else {
+			for (int i = optind; i < argc; ++i) {
+				if (!source (argv[i], env)->value) {
+					cout << "cannot open \'" << argv[i] <<"\'" << endl;
+				}
+			}
+			if (interactive) repl (env, cin, cout);
+		}
+	} catch (std::exception& e) {
+			cout << RED << "error: " << e.what () << RESET << std::endl;
+	} catch (AtomPtr& e) {
+		cout << RED << "error: uncaught expection " << RESET;
+		puts (e, cout); cout << std::endl;
+	} catch (...) {
+		cout << RED << "fatal error: execution stopped" << RESET << std::endl;
+	}
+	return 0;
 }
+
+// eof
