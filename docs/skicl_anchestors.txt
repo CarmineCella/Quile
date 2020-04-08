@@ -4,11 +4,9 @@ digraph {
 	"Lisp" -> "BYO Lisp"
 	"Lisp" -> "Scheme"
 	"Lisp" -> "TCL"
-	"Scheme" -> "Vuza"
-	"Scheme" -> "Helyc"
-	"BYO Lisp" -> "Helyc"
 	"TCL" -> "Skicl"
-	"Vuza" -> "Skicl"
-	"Helyc" -> "Skicl"
-
+	"Scheme" -> "TCL"
+	"Scheme" -> "Skicl"
+	"Lisp" -> "Skicl"
+	"BYO Lisp" -> "Skicl"
 }

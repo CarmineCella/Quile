@@ -13,7 +13,7 @@ add_executable(skicl skicl.cpp skicl.h)
 target_link_libraries (skicl dl ${LIBS})
 
 INSTALL(FILES skicl.h DESTINATION include)
-INSTALL(PROGRAMS boostrap.tcl DESTINATION $ENV{HOME}/.skicl)
+INSTALL(PROGRAMS core.tcl DESTINATION $ENV{HOME}/.skicl)
 INSTALL(
     TARGETS skicl 
     RUNTIME DESTINATION bin
