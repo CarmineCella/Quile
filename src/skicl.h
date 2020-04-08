@@ -24,13 +24,14 @@
 #define RED     	"\033[31m" 
 #define RESET   	"\033[0m"
 
+// TODO: line numbers, tests, examples, libraries, complete core lib
 // ast
 struct Atom;
 typedef std::shared_ptr<Atom> AtomPtr;
 typedef double Real;
 typedef AtomPtr (*Builtin) (AtomPtr, AtomPtr);
-enum AtomType {NUMBER, SYMBOL, STRING, LIST, STREAM, PROC, BUILTIN};
-const char* TYPE_NAMES[] = {"number", "symbol", "string", "list", "stream", "proc",  "builtin"};
+enum AtomType {NUMBER, SYMBOL, STRING, LIST, STREAM, PROC, BUILTIN, OBJECT};
+const char* TYPE_NAMES[] = {"number", "symbol", "string", "list", "stream", "proc", "builtin", "object"};
 struct Atom {
 private:
 	// create only via factory methods
@@ -45,6 +46,7 @@ public:
 	std::deque<AtomPtr> sequence;
 	Builtin func;
 	int minargs;
+	void* obj;
 	static AtomPtr make_sequence (bool is_stream = false) { 
 		AtomPtr l = std::make_shared<Atom> (_constructor_tag{}); 
 		l->type = is_stream ? AtomType::STREAM : AtomType::LIST;
@@ -90,6 +92,12 @@ public:
 		s->minargs = min;
 		return s;	
 	}
+	static AtomPtr make_object (const std::string& type, void * o, AtomPtr cb) { 
+		AtomPtr p = std::make_shared<Atom> (_constructor_tag{}); 
+		p->type = AtomType::OBJECT;
+		p->obj = o; p->token = type; p->sequence.push_back (cb);
+		return p;
+	}	
 };
 bool is_null (AtomPtr node) { 
 	return !node || 
@@ -114,6 +122,7 @@ int atom_eq (AtomPtr x, AtomPtr y) {
 			return (atom_eq (x->sequence.at(0), y->sequence.at(0)) 
 				&& atom_eq (x->sequence.at(1), y->sequence.at(1)));
 	    case AtomType::BUILTIN: return (x->func == y->func);
+		case AtomType::OBJECT: return (x->token == y->token && x->obj == y->obj);	    
 		default:
 		return 0;
 	}
@@ -386,6 +395,9 @@ std::ostream& puts (AtomPtr node, std::ostream& out, bool is_write = false) {
 					<< node->minargs << ">";
 			} else out << node->token;
 		break;
+		case OBJECT:
+			out << "<object: " << node->token << ", " << &node->obj << ">";
+		break;		
 	}
 	return out;
 }
@@ -802,7 +814,6 @@ AtomPtr make_env () {
     return env;
 }
 void repl (AtomPtr env, std::istream& in, std::ostream& out) {
-	int line = 0;
 	#if defined (ENABLE_READLINE)
 	char* line_read = 0;
 	#endif

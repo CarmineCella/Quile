@@ -1,13 +1,13 @@
 # Skicl
 
-Skicl is a hybrid dialect of TCL and Scheme, with influences from other functional
+Skicl is a hybrid dialect of Scheme and TCL, with influences from other functional
 languages: 
 
 ![Genealogy](docs/skicl_anchestors.png)
 
 It has been designed to be small, easy to expand and easy to embed in host applications; it is made of a single C++ header and some additional Skicl files.
 
-Skicl include several advanced features among which:
+Skicl includes several advanced features among which:
 
 * homoiconicity
 * partial evaluation
