@@ -24,46 +24,46 @@ dynamic let {b} {
 proc car {x} {lindex $x 0}
 proc cdr {x} {lrange $x 1 [- [llength $x] 1]}
 proc second {x} {car [cdr $x]}
-proc last {l} {lindex  $l [- [llength $l] 1]}
-proc drop {l n} {
+proc llast {l} {lindex  $l [- [llength $l] 1]}
+proc ldrop {l n} {
 	if {<= $n 0} {
-		fuse $l
+		ljoin $l
 	} else {
-		drop [cdr $l] [- $n 1] 
+		ldrop [cdr $l] [- $n 1] 
 	}
 }
-proc rep {n l} {
+proc lrepeat {n l} {
 	if {> $n 0}	{
-		fuse [list] $l [dup [- $n 1] $l]
+		ljoin [list] $l [dup [- $n 1] $l]
 	}
 }
 
-proc split {l n} {
+proc lsplit {l n} {
 	list [lrange $l 0 [- $n 1]] [drop $l $n]
 }
-proc match {e l} {
+proc lmatch {e l} {
 	if {eq $l {}} {
 		list
 	} else {
 		if {eq $e [car $l]} {
-			fuse $l
+			ljoin $l
 		} else {
-			match $e [cdr $l]
+			lmatch $e [cdr $l]
 		}
 	}
 }
-proc elem {x l} {
-	if {eq 0 [llength [match $x $l]]} {
-		fuse $false
+proc lelem {x l} {
+	if {eq 0 [llength [lmatch $x $l]]} {
+		pass $false
 	} else {
-		fuse $true
+		pass $true
 	}
 }
-proc reverse {l} {
+proc lreverse {l} {
 	if {eq {} $l} {
 		list
 	} else {
-		fuse [reverse [cdr $l]] [car $l]
+		ljoin [reverse [cdr $l]] [car $l]
 	}
 }
 
@@ -72,21 +72,21 @@ proc map {f l} {
 	if {eq {} $l} {
 		list
 	} else {
-		fuse [list [$f [car $l]]] [map $f [cdr $l]]
+		ljoin [list [$f [car $l]]] [map $f [cdr $l]]
 	}
 }
 proc filter {f l} {
 	if {eq {} $l} {
     	list
    	} else {
-    	fuse [if {$f [car $l]} {list [lindex $l 0]} else {list}] [filter $f [cdr $l]]
+    	ljoin [if {$f [car $l]} {list [lindex $l 0]} else {list}] [filter $f [cdr $l]]
     }
 }
-proc unpack  {f l} {eval [fuse [list] $f $l]}
+proc unpack  {f l} {eval [ljoin [list] $f $l]}
 proc pack {f} {$f $&}
 proc foldl {f z l} {
 	if {eq {} $l} {
-		fuse $z
+		pass $z
 	} else {
 		foldl $f [$f $z [car $l]] [cdr $l]
 	}
@@ -95,31 +95,28 @@ proc flip {f a b} {$f $b $a}
 proc comp {f g x} {$f [$g $x]}
 
 # logical operators
-proc not {x} {if {fuse $x} {fuse 0} else {fuse 1}}
-proc or {x y}  {if {+ $x $y} {fuse 1} else {fuse 0}}
-proc and {x y} {if {* $x $y} {fuse 1} else {fuse 0}}
+proc not {x} {if {pass $x} {pass 0} else {pass 1}}
+proc or {x y}  {if {+ $x $y} {pass 1} else {pass 0}}
+proc and {x y} {if {* $x $y} {pass 1} else {pass 0}}
 proc != {n1 n2} {not [eq $n1 $n2]}
 
 # miscellaneous
 set mul-neg [comp - [unpack *]]
 proc sum {l} {foldl + 0 $l}
 proc prod {l} {foldl * 1 $l}
-# proc case {x} {
-# 	puts [car $&] " **** " $nl
-#  	if {eq $& {}} {
-#  		throw [tostr "case not found " $x]
-#  	} else {
-#  		puts [car[car $&]] " --- " $nl
-#  		if {eq $x [car[car $&]]} {
-#  			second [car $&]
-#  		} else {
-#  			puts [lappend [list] $x [cdr $&]]
-#  			unpack case [lappendx $x [cdr $&]]
-#  		}
-#     }
-# }
+proc case {x} {
+ 	if {eq $& {}} {
+ 		throw "case not found"
+ 	} else {
+ 		if {eq $x [car [car $&]]} {
+ 			second [car $&]
+ 		} else {
+ 			unpack case [ljoin [list] $x [cdr $&]]
+ 		}
+    }
+}
 proc test {x y} {
-	if {eq (fuse [list] [eval $x]] $y} {
+	if {eq (ljoin [list] [eval $x]] $y} {
 		puts $x " passed" $nl 
 	} else {
 		throw [tostr "*** FAILED *** " $x]

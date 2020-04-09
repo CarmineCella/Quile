@@ -24,9 +24,9 @@ proc car {x} {lindex $x 0}
 proc cdr {x} {lrange $x 1 [- [llength $x] 1]}
 proc map {f l} {
 	if {eq {} $l} {
-		join {}
+		concat {}
 	} else {
-		join [list [$f [car $l]]] [map $f [cdr $l]]
+		concat [list [$f [car $l]]] [map $f [cdr $l]]
 	}
 }
 
@@ -34,15 +34,15 @@ puts "map " [map [\{x}{* $x $x}] {1 2 3 4 5}] $nl
 
 proc filter {f l} {
 	if {eq {} $l} {
-    	join {}
+    	concat {}
    	} else {
-    	join [if {$f [car $l]} {list [lindex $l 0]} else {list}] [filter $f [cdr $l]]
+    	concat [if {$f [car $l]} {list [lindex $l 0]} else {list}] [filter $f [cdr $l]]
     }
 }
 
 puts "filter " [filter [\ {x} {> $x 5}] {5 2 11 -7 8 1}] $nl
 
-proc unpack  {f l} {eval [join {} $f $l]}
+proc unpack  {f l} {eval [concat {} $f $l]}
 proc pack {f} {$f $&}
 
 puts "unpack " [unpack + [list 4 5]] $nl
@@ -98,7 +98,7 @@ puts [count-down-from-4] $nl
 
 proc fib {x} {
     if {<= $x 1} {
-        join 1
+        concat 1
     } else {
         + [fib [- $x 1]] [fib [- $x 2]]
     }

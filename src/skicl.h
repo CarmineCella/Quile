@@ -228,7 +228,7 @@ AtomPtr gets (std::istream& input, int& nesting, const std::string& terminator) 
 AtomPtr gets (std::istream& input) {
 	int nesting = 1;
 	AtomPtr r = gets (input, nesting, "\n");
-	if (nesting && !is_null (r)) error ("invalid nesting in", r);
+	if (nesting && !is_null (r)) error ("syntax error (missing newline/invalid nesting) in", r);
 	return r;
 }
 AtomPtr assoc (const std::string& sym, AtomPtr env) {
@@ -391,9 +391,11 @@ std::ostream& puts (AtomPtr node, std::ostream& out, bool is_write = false) {
 		break;
 		case BUILTIN: 
 			if (is_write) {
+				out << node->token;
+			} else {
 				out << "<" << (std::hex) << &node->func << ", min args: " 
 					<< node->minargs << ">";
-			} else out << node->token;
+			}
 		break;
 		case OBJECT:
 			out << "<object: " << node->token << ", " << &node->obj << ">";
@@ -477,26 +479,6 @@ AtomPtr fn_info (AtomPtr b, AtomPtr env) {
 AtomPtr fn_list (AtomPtr node, AtomPtr env) {
 	return node;
 }
-AtomPtr fuse (AtomPtr dst, AtomPtr ll) {
-	// if (ll->type == AtomType::LIST) {
-	// 	for (unsigned i = 0; i < ll->sequence.size (); ++i) {
-	// 		dst->sequence.push_back (ll->sequence.at (i));
-	// 	}
-	// } else dst->sequence.push_back (ll);
-	// return dst;
-	if (ll->type == AtomType::LIST) {
-		for (unsigned i = 0; i < ll->sequence.size (); ++i) {
-			AtomPtr flatten = Atom::make_sequence();
-			dst = fuse (dst, ll->sequence.at (i));
-		}
-	} else dst->sequence.push_back (ll);
-	return dst;
-}
-AtomPtr fn_fuse (AtomPtr n, AtomPtr env) {
-	AtomPtr dst = n->sequence.at(0);
-	n->sequence.pop_front ();
-	return fuse (dst, n);
-}
 AtomPtr fn_lindex (AtomPtr params, AtomPtr env) {
 	AtomPtr l = type_check (params->sequence.at (0), AtomType::LIST, params);
 	int i = (int) (type_check(params->sequence.at (1), AtomType::NUMBER, params)->value);
@@ -518,12 +500,17 @@ AtomPtr fn_llength (AtomPtr params, AtomPtr env) {
 	AtomPtr l = type_check (params->sequence.at (0), AtomType::LIST, params);
 	return Atom::make_number (l->sequence.size ());
 }
-AtomPtr fn_lappend (AtomPtr params, AtomPtr env) {
-	AtomPtr l = type_check (params->sequence.at (0), AtomType::LIST, params);
+AtomPtr fn_ljoin (AtomPtr params, AtomPtr env) {
+	AtomPtr dst = type_check (params->sequence.at (0), AtomType::LIST, params);
 	for (unsigned i = 1; i < params->sequence.size (); ++i) {
-		l->sequence.push_back(params->sequence.at (i));
+		AtomPtr ll = params->sequence.at (i);
+		if (ll->type == AtomType::LIST) {
+			for (unsigned i = 0; i < ll->sequence.size (); ++i) {
+				dst->sequence.push_back (ll->sequence.at (i));
+			}
+		} else dst->sequence.push_back (ll);
 	}
-	return l;
+	return dst;
 }
 AtomPtr fn_while (AtomPtr b,  AtomPtr env) {
 	AtomPtr res = Atom::make_sequence();
@@ -547,6 +534,9 @@ AtomPtr fn_passby (AtomPtr b,  AtomPtr env) {
 		break;
 		case 1:
 			return Atom::make_symbol("break");
+		break;
+		case 2:
+			return b->sequence.at (0);
 		break;
 	}
 	return Atom::make_sequence();
@@ -573,7 +563,7 @@ AtomPtr fn_catch (AtomPtr node, AtomPtr env) { // not tail recursive
 template <int mode>
 AtomPtr fn_format (AtomPtr node, AtomPtr env) {
 	std::stringstream tmp;
-	for (unsigned i = mode == 2 ? 1 : 0; i < node->sequence.size (); ++i) {
+	for (unsigned i = (mode == 2 ? 1 : 0); i < node->sequence.size (); ++i) {
 		puts (node->sequence.at (i), tmp, (mode == 2 ? true : false));
 	}
 	switch (mode) {
@@ -783,17 +773,17 @@ AtomPtr make_env () {
     add_builtin("info", fn_info, 1, env);
 	// sequences
 	add_builtin ("list", fn_list, 0, env);
-	add_builtin ("fuse", fn_fuse, 1, env);
 	add_builtin ("lindex", fn_lindex, 1, env);
 	add_builtin ("lrange", fn_lrange, 2, env);
 	add_builtin ("llength", fn_llength, 1, env);
-	add_builtin ("lappend", fn_lappend, 1, env);
+	add_builtin ("ljoin", fn_ljoin, 1, env);
     // flow control
     add_builtin("eval", fn_eval, 1, env);
     add_builtin("if", fn_if, 2, env);
     add_builtin("while", fn_while, 2, env);
     add_builtin("continue", fn_passby<0>, 0, env);
     add_builtin("break", fn_passby<1>, 0, env);
+    add_builtin("pass", fn_passby<2>, 1, env);
     add_builtin ("catch", fn_catch, 3, env);
     add_builtin ("throw", fn_throw, 1, env);	
     //I/O
