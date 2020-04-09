@@ -15,6 +15,6 @@ Skicl includes several advanced features among which:
 * macros
 * lambda functions with closures
 
-For an overview on the language please see [overview.tcl](examples/overview.tcl)].
+For an overview on the language, please see [overview.tcl](examples/overview.tcl).
 
 (c) 2020 by Carmine E. Cella, www.carminecella.com
