@@ -1,12 +1,26 @@
 digraph {
 	node [shape=box]
 	
-	"Lisp" -> "BYO Lisp"
+	"IPL" -> "Lisp"
 	"Lisp" -> "Scheme"
 	"Lisp" -> "TCL"
+	"Awk" -> "TCL"
+	"Algol" -> "C"
+	"Algol" -> "CPL"
+	"B" -> "C"
+	"BCPL" -> "B"
+	"PL/I" -> "B"
+	"Algol" -> "PL/I"
+	"Cobol" -> "PL/I"
+	"Fortran" -> "PL/I"
+	"CPL" -> "BCPL"
+	"BCPL" -> "C"
+	"C" -> "Awk"
 	"TCL" -> "Skicl"
+	"Algol" -> "Scheme"
+	"Lisp" -> "MDL"
+	"MDL" -> "Scheme"
 	"Scheme" -> "TCL"
 	"Scheme" -> "Skicl"
 	"Lisp" -> "Skicl"
-	"BYO Lisp" -> "Skicl"
 }
