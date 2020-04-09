@@ -4,7 +4,7 @@ The Skicl programming language is a hybrid dialect of Lisp, Scheme and TCL:
 
 ![Genealogy](docs/skicl_anchestors.png)
 
-It has been designed to be small, easy to expand and easy to embed in host applications; it is made of a single C++ header and some additional Skicl files.
+It has been designed to be small, easy to expand and easy to embed in host applications. It is made of a single small C++ header (~ 800 loc) and some additional files written using Skicl itself.
 
 Skicl includes several neat features among which:
 
