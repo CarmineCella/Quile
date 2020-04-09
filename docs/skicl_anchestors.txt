@@ -16,11 +16,11 @@ digraph {
 	"CPL" -> "BCPL"
 	"BCPL" -> "C"
 	"C" -> "Awk"
-	"TCL" -> "Skicl"
+	"TCL" -> "Skicl" [style = bold]
 	"Algol" -> "Scheme"
 	"Lisp" -> "MDL"
 	"MDL" -> "Scheme"
 	"Scheme" -> "TCL"
-	"Scheme" -> "Skicl"
-	"Lisp" -> "Skicl"
+	"Scheme" -> "Skicl" [style = bold]
+	"Lisp" -> "Skicl" [style = bold]
 }

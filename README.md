@@ -1,7 +1,6 @@
 # Skicl
 
-Skicl is a hybrid dialect of Scheme and TCL, with influences from other functional
-languages: 
+Skicl is a hybrid dialect of Lisp, Scheme and TCL, with influences from other languages: 
 
 ![Genealogy](docs/skicl_anchestors.png)
 
@@ -13,6 +12,6 @@ Skicl includes several advanced features among which:
 * partial evaluation
 * tail recursion
 * static and dynamic scoping
-* lambda functions
+* lambda functions with closures
 
 (c) 2020 by Carmine E. Cella, www.carminecella.com
