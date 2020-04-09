@@ -12,6 +12,9 @@ Skicl includes several advanced features among which:
 * partial evaluation
 * tail recursion
 * static and dynamic scoping
+* macros
 * lambda functions with closures
+
+For an overview on the language please see [overview.tcl](examples/overview.tcl)].
 
 (c) 2020 by Carmine E. Cella, www.carminecella.com
