@@ -24,7 +24,7 @@
 #define RED     	"\033[31m" 
 #define RESET   	"\033[0m"
 
-// TODO: line numbers, tests, examples, libraries, complete core lib
+// TODO: line numbers, tests, libraries, deque bug for eval and if
 // ast
 struct Atom;
 typedef std::shared_ptr<Atom> AtomPtr;
@@ -431,10 +431,10 @@ bool unset (AtomPtr k, AtomPtr env) {
 AtomPtr fn_unset (AtomPtr b,  AtomPtr env) {
 	for (unsigned i = 0; i < b->sequence.size (); ++i) {
 		if (!unset(b->sequence.at (i), env)) {
-			error ("unbound identifier in", b);
+			return Atom::make_number(0);
 		}	
 	}
-	return Atom::make_string("");
+	return Atom::make_number(1);
 }
 template <bool dynamic>
 AtomPtr fn_lambda (AtomPtr n, AtomPtr env) {
@@ -691,7 +691,7 @@ AtomPtr fn_string (AtomPtr node, AtomPtr env) {
 			type_check (node->sequence.at(2), AtomType::STRING, node)->token, 
 			type_check (node->sequence.at(3), AtomType::STRING, node)->token);
 		return Atom::make_string(tmp);
-	} else if (cmd == "regexp") {
+	} else if (cmd == "regex") {
 		if (node->sequence.size () < 3) error ("invalid number of arguments in", node);
 		std::string str = type_check (node->sequence.at(1), AtomType::STRING, node)->token;
 		std::regex r (type_check (node->sequence.at(2), AtomType::STRING, node)->token);

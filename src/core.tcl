@@ -25,6 +25,7 @@ proc car {x} {lindex $x 0}
 proc cdr {x} {lrange $x 1 [- [llength $x] 1]}
 proc second {x} {car [cdr $x]}
 proc llast {l} {lindex  $l [- [llength $l] 1]}
+proc ltake {l n} {lrange $l 0 [- $n 1]}
 proc ldrop {l n} {
 	if {<= $n 0} {
 		ljoin $l
@@ -39,7 +40,7 @@ proc lrepeat {n l} {
 }
 
 proc lsplit {l n} {
-	list [lrange $l 0 [- $n 1]] [drop $l $n]
+	list [lrange $l 0 [- $n 1]] [ldrop $l $n]
 }
 proc lmatch {e l} {
 	if {eq $l {}} {
@@ -63,7 +64,7 @@ proc lreverse {l} {
 	if {eq {} $l} {
 		list
 	} else {
-		ljoin [reverse [cdr $l]] [car $l]
+		ljoin [lreverse [cdr $l]] [car $l]
 	}
 }
 
@@ -116,7 +117,8 @@ proc case {x} {
     }
 }
 proc test {x y} {
-	if {eq (ljoin [list] [eval $x]] $y} {
+	set res [ljoin [list] [eval $x]]
+	if {eq $res $y} {
 		puts $x " passed" $nl 
 	} else {
 		throw [tostr "*** FAILED *** " $x]
