@@ -33,7 +33,7 @@ proc ldrop {l n} {
 }
 proc lrepeat {n l} {
 	if {> $n 0}	{
-		ljoin [list] $l [dup [- $n 1] $l]
+		ljoin [list] $l [lrepeat [- $n 1] $l]
 	}
 }
 
