@@ -5,7 +5,7 @@ The *Quile scripting language* is a hybrid dialect of Lisp, Scheme and TCL:
 ![Genealogy](docs/quile_anchestors.png)
 
 It has been designed to be small, easy to expand and easy to embed in host applications. 
-The core of the language is made of a single [C++ header](src/skicl.h) (~ 800 loc in total) and some additional files written using *Quile* itself.
+The core of the language is made of a single [C++ header](src/quile.h) (~ 800 loc in total) and some additional files written using *Quile* itself.
 
 *Quile* includes several neat features among which:
 
