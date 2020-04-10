@@ -69,16 +69,6 @@ puts $nl "---  atoms ---" $nl
 test {pass $true}{1}
 test {pass $false}{0}
 
-puts $nl "---  local scope ---" $nl
-test {eval {+ 1 2}}{3}
-test {
-	let {
-		set hhh 123
-		pass [+ $hhh $hhh]
-	}
-} {246}
-test {unset hhh}{0}
-
 puts $nl  "---  lists ---" $nl
 test {llength {a b c d}}{4}
 test {llength {}}{0}
