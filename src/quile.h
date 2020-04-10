@@ -1,7 +1,7 @@
-// skicl.h
+// quile.h
 //
-#ifndef SKICL_H
-#define SKICL_H
+#ifndef QUILE_H
+#define QUILE_H
 
 #include <deque>
 #include <string>
@@ -596,7 +596,7 @@ AtomPtr source (const std::string& name, AtomPtr env) {
 	std::ifstream in (name.c_str ());
 	if (!in.good ()) {
 		std::string longname = getenv("HOME");
-		longname += "/.skicl/" + name;
+		longname += "/.quile/" + name;
 		in.open (longname.c_str());
 		if (!in.good ()) return Atom::make_symbol("0");
 	}
@@ -734,11 +734,11 @@ void add_builtin (const std::string& name, Builtin f, int minargs, AtomPtr env) 
 AtomPtr fn_import (AtomPtr params, AtomPtr env) {
 		std::string name = getenv ("HOME");
 #ifdef __APPLE__
-		name += "/.skicl/" + type_check (params->sequence.at(0), AtomType::STRING, params)->token + ".so";
+		name += "/.quile/" + type_check (params->sequence.at(0), AtomType::STRING, params)->token + ".so";
 #elif __linux
-		name += "/.skicl/" + type_check (params->sequence.at(0), AtomType::STRING, params)->token + ".so";
+		name += "/.quile/" + type_check (params->sequence.at(0), AtomType::STRING, params)->token + ".so";
 #else
-		name += "/.skicl/" + type_check (params->sequence.at(0), AtomType::STRING.params)->token + ".dll";
+		name += "/.quile/" + type_check (params->sequence.at(0), AtomType::STRING.params)->token + ".dll";
 #endif
 	void* handle = dlopen (name.c_str (), RTLD_NOW);
 	if (!handle) {
@@ -855,4 +855,5 @@ void repl (AtomPtr env, std::istream& in, std::ostream& out) {
 
 // EOF
 
-#endif // SKICL_H	
+#endif // QUILE_H
+

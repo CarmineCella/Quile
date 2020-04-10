@@ -1,8 +1,11 @@
-# Overview of some features of Skicl
+# {Overview of some features of Quile}
+#
+# (c) 2020, www.quile.org
+#
 
 source "core.tcl"
 
-puts "Hallo Skicl!!" $nl $nl
+puts "Hallo Quile!!" $nl $nl
 
 puts "[inrtospection]" $nl $nl
 puts "the list of current variables is: " $nl

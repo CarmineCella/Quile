@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 2.8.9)
-project (skicl)
+project (quile)
 
 SET(CMAKE_CXX_FLAGS "-Wall -g -O2 -std=c++17 -I . -Wno-return-type-c-linkage")
 
@@ -9,13 +9,13 @@ if (ENABLE_READLINE)
     add_definitions (-DENABLE_READLINE)
 endif()
 
-add_executable(skicl skicl.cpp skicl.h)
-target_link_libraries (skicl dl ${LIBS})
+add_executable(quile quile.cpp quile.h)
+target_link_libraries (quile dl ${LIBS})
 
-INSTALL(FILES skicl.h DESTINATION include)
-INSTALL(PROGRAMS core.tcl DESTINATION $ENV{HOME}/.skicl)
+INSTALL(FILES quile.h DESTINATION include)
+INSTALL(PROGRAMS core.tcl DESTINATION $ENV{HOME}/.quile)
 INSTALL(
-    TARGETS skicl 
+    TARGETS quile 
     RUNTIME DESTINATION bin
-    LIBRARY DESTINATION $ENV{HOME}/.skicl
-    ARCHIVE DESTINATION $ENV{HOME}/.skicl)
+    LIBRARY DESTINATION $ENV{HOME}/.quile
+    ARCHIVE DESTINATION $ENV{HOME}/.quile)

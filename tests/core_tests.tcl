@@ -1,6 +1,6 @@
-# {Tests for the Skicl core library}
+# {Tests for the Quile core library}
 #
-# (c) 2020 www.carminecella.com
+# (c) 2020, www.quile.org
 #
 
 source "core.tcl"

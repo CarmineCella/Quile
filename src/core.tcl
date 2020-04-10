@@ -1,8 +1,6 @@
-# --------------------
-# [skicl] core library
-# --------------------
+# {Quile core library}
 #
-# (c) 2020, www.skicl.org, www.carminecella.com
+# (c) 2020, www.quile.org
 #
 
 # atoms

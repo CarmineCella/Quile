@@ -1,7 +1,7 @@
-// skicl.cpp
+// quile.cpp
 //
 
-#include "skicl.h"
+#include "quile.h"
 
 #include <iostream>
 #include <sstream>
@@ -11,7 +11,7 @@
 
 using namespace std;
 
-const char* PACKAGE[] = {"skicl"};
+const char* PACKAGE[] = {"quile"};
 const char* VERSION[] = {"0.2"};
 
 int main (int argc, char* argv[]) {
@@ -34,8 +34,8 @@ int main (int argc, char* argv[]) {
 			cout << BOLDBLUE << "[" << *PACKAGE << ", version "
 				<< *VERSION <<"]" << RESET << endl << endl;
 
-			cout << "programming language" << endl;
-			cout << "(c) 2020, www.skicl.org" << endl << endl;
+			cout << "scripting language" << endl;
+			cout << "(c) 2020, www.quile.org" << endl << endl;
 			cout << "Ctrl-C or (exit) to terminate" << endl << endl;
 
 			repl (env, cin, cout);

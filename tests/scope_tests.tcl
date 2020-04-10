@@ -1,6 +1,6 @@
-# {Tests for the Skicl scope policies}
+# {Tests for the Quile scope policies}
 #
-# (c) 2020 www.carminecella.com
+# (c) 2020, www.quile.org
 #
 source "core.tcl"
 
