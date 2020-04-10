@@ -1,6 +1,6 @@
-# Quile
+# {Quile}
 
-The *Quile scripting language* is a hybrid dialect of Lisp, Scheme and TCL: 
+The *Quile* scripting language is a hybrid dialect of Lisp, Scheme and TCL: 
 
 ![Genealogy](docs/quile_anchestors.png)
 
