@@ -378,7 +378,8 @@ std::ostream& puts (AtomPtr node, std::ostream& out, bool is_write = false) {
 		case STREAM: case LIST:
 			out << (node->type == STREAM ? "[" : "{");
 			for (unsigned i = 0; i < node->sequence.size (); ++i) {
-				puts (node->sequence.at (i), out, is_write) << " ";
+				puts (node->sequence.at (i), out, is_write) << 
+					(i == node->sequence.size () - 1 ? "" : " ");
 			}
 			out << (node->type == STREAM ? "]" : "}");
 		break;
