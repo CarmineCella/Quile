@@ -24,7 +24,7 @@
 #define RED     	"\033[31m" 
 #define RESET   	"\033[0m"
 
-// TODO: line numbers, tests, libraries, deque bug for eval and if
+// TODO: line numbers, tests, libraries, deque bug for eval and if, lrange with stride, linterleave
 // ast
 struct Atom;
 typedef std::shared_ptr<Atom> AtomPtr;

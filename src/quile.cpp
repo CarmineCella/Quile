@@ -36,7 +36,6 @@ int main (int argc, char* argv[]) {
 
 			cout << "scripting language" << endl;
 			cout << "(c) 2020, www.quile.org" << endl << endl;
-			cout << "Ctrl-C or (exit) to terminate" << endl << endl;
 
 			repl (env, cin, cout);
 		} else {
