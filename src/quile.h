@@ -11,7 +11,6 @@
 #include <memory>
 #include <iostream>
 #include <map>
-#include <variant>
 #include <regex>
 #include <cmath>
 #include <dlfcn.h>
@@ -599,7 +598,9 @@ AtomPtr source (const std::string& name, AtomPtr env) {
 		std::string longname = getenv("HOME");
 		longname += "/.quile/" + name;
 		in.open (longname.c_str());
-		if (!in.good ()) return Atom::make_symbol("0");
+		if (!in.good ()) {
+			error ("cannot open input file", Atom::make_string (name));
+		}
 	}
     AtomPtr res;
 	while (!in.eof ()) {

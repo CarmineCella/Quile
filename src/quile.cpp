@@ -40,9 +40,7 @@ int main (int argc, char* argv[]) {
 			repl (env, cin, cout);
 		} else {
 			for (int i = optind; i < argc; ++i) {
-				if (!source (argv[i], env)->value) {
-					cout << "cannot open \'" << argv[i] <<"\'" << endl;
-				}
+				source (argv[i], env);
 			}
 			if (interactive) repl (env, cin, cout);
 		}
