@@ -119,7 +119,7 @@ proc test {x y} {
 	if {eq $res $y} {
 		puts $x " passed" $nl 
 	} else {
-		throw [tostr "*** FAILED *** " $x]
+		throw [tostr "*** FAILED *** " $x "produced " $res " vs " $y]
 	}
 }	
 

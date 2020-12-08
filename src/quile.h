@@ -12,6 +12,7 @@
 #include <iostream>
 #include <map>
 #include <regex>
+#include <valarray>
 #include <cmath>
 #include <dlfcn.h>
 #if defined (ENABLE_READLINE)
@@ -29,8 +30,9 @@ struct Atom;
 typedef std::shared_ptr<Atom> AtomPtr;
 typedef double Real;
 typedef AtomPtr (*Builtin) (AtomPtr, AtomPtr);
-enum AtomType {NUMBER, SYMBOL, STRING, LIST, STREAM, PROC, BUILTIN, OBJECT};
-const char* TYPE_NAMES[] = {"number", "symbol", "string", "list", "stream", "proc", "builtin", "object"};
+void array_from_list (AtomPtr list, std::valarray<Real>& out);
+enum AtomType {NUMBER, SYMBOL, STRING, LIST, STREAM, ARRAY, PROC, BUILTIN, OBJECT};
+const char* TYPE_NAMES[] = {"number", "symbol", "string", "list", "stream", "array", "proc", "builtin", "object"};
 struct Atom {
 private:
 	// create only via factory methods
@@ -43,6 +45,7 @@ public:
 	Real value;
 	std::string token;
 	std::deque<AtomPtr> sequence;
+	std::valarray<Real> array;
 	Builtin func;
 	int minargs;
 	void* obj;
@@ -51,6 +54,12 @@ public:
 		l->type = is_stream ? AtomType::STREAM : AtomType::LIST;
 		return l; 
 	}
+	static AtomPtr make_array (std::valarray<Real>& in) { 
+		AtomPtr l = std::make_shared<Atom> (_constructor_tag{}); 
+		l->type = AtomType::ARRAY;
+		l->array = in;
+		return l; 
+	}	
 	static AtomPtr make_number (Real v) { 
 		AtomPtr l = std::make_shared<Atom> (_constructor_tag{}); 
 		l->type = AtomType::NUMBER;
@@ -126,6 +135,16 @@ int atom_eq (AtomPtr x, AtomPtr y) {
 		return 0;
 	}
 }
+AtomPtr list_from_array (std::valarray<Real>& in) {
+	AtomPtr l = Atom::make_sequence ();
+	for (unsigned i = 0; i < in.size (); ++i) l->sequence.push_back (Atom::make_number  (in[i]));
+	return l;
+}
+AtomPtr type_check (AtomPtr node, AtomType type, AtomPtr ctx);
+void array_from_list (AtomPtr list, std::valarray<Real>& out) {
+	out.resize (list->sequence.size ());
+	for (unsigned i = 0; i < out.size (); ++i) out[i] = type_check (list->sequence.at (i), AtomType::NUMBER, list)->value;
+}
 // lexing
 std::string get_token (std::istream& input) {
 	std::stringstream accum;
@@ -163,7 +182,6 @@ std::string get_token (std::istream& input) {
 	}
 	return accum.str ();
 }
-
 // parsing and evaluation
 std::ostream& puts (AtomPtr node, std::ostream& out, bool is_write);
 void error (const std::string& err, AtomPtr node) {
@@ -286,7 +304,6 @@ tail_call:
     		else params->sequence.push_back(c);
     	}
     }
-
     if (params->sequence.size () == 0) return Atom::make_sequence();
     AtomPtr cmd = params->sequence.at (0);
     if (cmd->type == AtomType::SYMBOL) cmd = assoc (cmd->token, env);
@@ -363,7 +380,6 @@ tail_call:
     } else error ("function expected in", cmd);
     return Atom::make_sequence();
 }
-
 // builtins
 std::ostream& puts (AtomPtr node, std::ostream& out, bool is_write = false) {
 	switch (node->type) {
@@ -381,6 +397,11 @@ std::ostream& puts (AtomPtr node, std::ostream& out, bool is_write = false) {
 					(i == node->sequence.size () - 1 ? "" : " ");
 			}
 			out << (node->type == STREAM ? "]" : "}");
+		break;
+		case ARRAY:
+			for (unsigned i = 0; i < node->array.size (); ++i) {
+				out << node->array[i] << " ";
+			}
 		break;
 		case PROC:
 			if (node->sequence.size () < 3) return out;
@@ -611,55 +632,71 @@ AtomPtr source (const std::string& name, AtomPtr env) {
 AtomPtr fn_source (AtomPtr b,  AtomPtr env) {
     return source (type_check (b->sequence.at (0), AtomType::STRING, b)->token, env);
 }
-#define MAKE_BINOP(op,name, unit)									\
-	AtomPtr name (AtomPtr n, AtomPtr env) {						\
-		if (n->sequence.size () == 1) {										\
-			return Atom::make_number(unit							\
-				op (type_check (n->sequence.at(0), AtomType::NUMBER, n)->value));								\
-		}															\
-		AtomPtr c = n;												\
-		Real s = (type_check (n->sequence.at(0), AtomType::NUMBER, n)->value);									\
-		for (unsigned i = 1; i < n->sequence.size (); ++i) {					\
-			s = s op type_check (n->sequence.at(i), AtomType::NUMBER, n)->value;								\
-		}															\
-		return Atom::make_number (s);								\
-	}			
+// #define MAKE_BINOP(op,name, unit)									\
+// 	AtomPtr name (AtomPtr n, AtomPtr env) {						\
+// 		if (n->sequence.size () == 1) {										\
+// 			return Atom::make_number(unit							\
+// 				op (type_check (n->sequence.at(0), AtomType::NUMBER, n)->value));								\
+// 		}															\
+// 		AtomPtr c = n;												\
+// 		Real s = (type_check (n->sequence.at(0), AtomType::NUMBER, n)->value);									\
+// 		for (unsigned i = 1; i < n->sequence.size (); ++i) {					\
+// 			s = s op type_check (n->sequence.at(i), AtomType::NUMBER, n)->value;								\
+// 		}															\
+// 		return Atom::make_number (s);								\
+// 	}			
 
-#define MAKE_CMPOP(op,fn_name) \
-	AtomPtr fn_name (AtomPtr n, AtomPtr env) { \
-		Real base = 1; \
-		for (unsigned i = 0; i < n->sequence.size () - 1; ++i) { \
-			if (!(type_check (n->sequence.at(i), AtomType::NUMBER, n)->value op \
-				type_check (n->sequence.at(i + 1), AtomType::NUMBER, n)->value)) { \
-				base = 0; \
-			} \
-		} \
-		return Atom::make_number (base); \
-	} \
+// #define MAKE_CMPOP(op,fn_name) \
+// 	AtomPtr fn_name (AtomPtr n, AtomPtr env) { \
+// 		Real base = 1; \
+// 		for (unsigned i = 0; i < n->sequence.size () - 1; ++i) { \
+// 			if (!(type_check (n->sequence.at(i), AtomType::NUMBER, n)->value op \
+// 				type_check (n->sequence.at(i + 1), AtomType::NUMBER, n)->value)) { \
+// 				base = 0; \
+// 			} \
+// 		} \
+// 		return Atom::make_number (base); \
+// 	} \
 
-#define MAKE_SINGOP(op,fn_name) \
-	AtomPtr fn_name (AtomPtr n, AtomPtr env) { \
-		return Atom::make_number (op(type_check (n->sequence.at(0), AtomType::NUMBER, n)->value)); \
-	} \
+// #define MAKE_SINGOP(op,fn_name) \
+// 	AtomPtr fn_name (AtomPtr n, AtomPtr env) { \
+// 		return Atom::make_number (op(type_check (n->sequence.at(0), AtomType::NUMBER, n)->value)); \
+// 	} \
 
-MAKE_BINOP(+,fn_add,0);
-MAKE_BINOP(-,fn_sub,0);
-MAKE_BINOP(*,fn_mul,1);
-MAKE_BINOP(/,fn_div,1);
-MAKE_CMPOP(<,fn_less);
-MAKE_CMPOP(>,fn_gt);
-MAKE_CMPOP(<=,fn_lesseq);
-MAKE_CMPOP(>=,fn_gteq);
-MAKE_SINGOP(sin, fn_sin);
-MAKE_SINGOP(cos,fn_cos);
-MAKE_SINGOP(log, fn_log);
-MAKE_SINGOP(exp, fn_exp);
-MAKE_SINGOP(fabs, fn_fabs);
-MAKE_SINGOP (sqrt,fn_sqrt);
-MAKE_SINGOP (floor, fn_floor);
+// MAKE_BINOP(+,fn_add,0);
+// MAKE_BINOP(-,fn_sub,0);
+// MAKE_BINOP(*,fn_mul,1);
+// MAKE_BINOP(/,fn_div,1);
+// MAKE_CMPOP(<,fn_less);
+// MAKE_CMPOP(>,fn_gt);
+// MAKE_CMPOP(<=,fn_lesseq);
+// MAKE_CMPOP(>=,fn_gteq);
+// MAKE_SINGOP(sin, fn_sin);
+// MAKE_SINGOP(cos,fn_cos);
+// MAKE_SINGOP(log, fn_log);
+// MAKE_SINGOP(exp, fn_exp);
+// MAKE_SINGOP(fabs, fn_fabs);
+// MAKE_SINGOP (sqrt,fn_sqrt);
+// MAKE_SINGOP (floor, fn_floor);
 AtomPtr fn_eq (AtomPtr n, AtomPtr env) {
 	return Atom::make_number(atom_eq (n->sequence.at(0), n->sequence.at(1)));
 }
+AtomPtr fn_array (AtomPtr n, AtomPtr env) {
+	std::valarray<Real> v;
+	array_from_list (n, v);
+	return Atom::make_array(v);
+}
+#define MAKE_ARRAYBINOP(op,name)									\
+	AtomPtr name (AtomPtr n, AtomPtr env) {						\
+		std::valarray<Real> v = (n->sequence.at (0)->array op n->sequence.at (1)->array); \
+		return  Atom::make_array (v); \
+	}\
+
+MAKE_ARRAYBINOP (+, fn_array_add);
+MAKE_ARRAYBINOP (-, fn_array_sub);
+MAKE_ARRAYBINOP (*, fn_array_mul);
+MAKE_ARRAYBINOP (/, fn_array_div);
+
 void replace (std::string &s, std::string from, std::string to) {
     int idx = 0;
     int next;
@@ -714,7 +751,6 @@ AtomPtr fn_exec (AtomPtr node, AtomPtr env) {
 	return Atom::make_number (system (
 		type_check (node->sequence.at(0), AtomType::STRING, node)->token.c_str ()));
 }
-
 AtomPtr fn_exit (AtomPtr node, AtomPtr env) {
 	int ret = 0;
 	if (node->sequence.size ()) ret = (int) node->sequence.at (0)->value;
@@ -795,7 +831,7 @@ AtomPtr make_env () {
     add_builtin("gets", fn_gets, 0, env);
     add_builtin("source", fn_source, 1, env);
     extend(Atom::make_symbol("nl"), Atom::make_symbol("\n"), env);
-    // arithmetics/logic
+    // arithmetics/arrays
 	add_builtin ("+", fn_add, 1, env);
 	add_builtin ("-", fn_sub, 1, env);
 	add_builtin ("*", fn_mul, 1, env);
@@ -812,6 +848,12 @@ AtomPtr make_env () {
 	add_builtin ("sqrt", fn_sqrt, 1, env);
 	add_builtin ("floor", fn_floor, 1, env);    
     add_builtin("eq", fn_eq, 2, env);
+	add_builtin ("array", fn_array, 0, env);
+	add_builtin ("array", fn_array, 0, env);
+	add_builtin ("add", fn_array_add, 0, env);
+	add_builtin ("sub", fn_array_sub, 0, env);
+	add_builtin ("mul", fn_array_mul, 0, env);
+	add_builtin ("div", fn_array_div, 0, env);
     //others
 	add_builtin ("string", fn_string, 2, env);
 	add_builtin ("exec", fn_exec, 1, env);
