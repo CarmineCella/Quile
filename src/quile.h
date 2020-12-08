@@ -30,9 +30,8 @@ struct Atom;
 typedef std::shared_ptr<Atom> AtomPtr;
 typedef double Real;
 typedef AtomPtr (*Builtin) (AtomPtr, AtomPtr);
-void array_from_list (AtomPtr list, std::valarray<Real>& out);
-enum AtomType {NUMBER, SYMBOL, STRING, LIST, STREAM, ARRAY, PROC, BUILTIN, OBJECT};
-const char* TYPE_NAMES[] = {"number", "symbol", "string", "list", "stream", "array", "proc", "builtin", "object"};
+enum AtomType {ARRAY, SYMBOL, STRING, LIST, STREAM, PROC, BUILTIN, OBJECT};
+const char* TYPE_NAMES[] = {"array", "symbol",  "string", "list", "stream", "proc", "builtin", "object"};
 struct Atom {
 private:
 	// create only via factory methods
@@ -54,16 +53,15 @@ public:
 		l->type = is_stream ? AtomType::STREAM : AtomType::LIST;
 		return l; 
 	}
+	static AtomPtr make_array (Real in) { 	
+		std::valarray<Real> v (1);
+		v[0] = in;
+		return Atom::make_array (v);
+	}
 	static AtomPtr make_array (std::valarray<Real>& in) { 
 		AtomPtr l = std::make_shared<Atom> (_constructor_tag{}); 
 		l->type = AtomType::ARRAY;
 		l->array = in;
-		return l; 
-	}	
-	static AtomPtr make_number (Real v) { 
-		AtomPtr l = std::make_shared<Atom> (_constructor_tag{}); 
-		l->type = AtomType::NUMBER;
-		l->value = v;
 		return l; 
 	}	
 	static AtomPtr make_symbol (const std::string& lex) { 
@@ -115,7 +113,7 @@ bool is_null (AtomPtr node) {
 int atom_eq (AtomPtr x, AtomPtr y) {
 	if (x->type != y->type) return 0;
 	switch (x->type) {
-	    case AtomType::NUMBER: return (x->value == y->value);
+	    case AtomType::ARRAY: return (x->array == y->array).min ();
     	case AtomType::SYMBOL: return (x == y);
     	case AtomType::STRING: return (x->token == y->token);
 	    case AtomType::LIST: case AtomType::STREAM:  {
@@ -134,16 +132,6 @@ int atom_eq (AtomPtr x, AtomPtr y) {
 		default:
 		return 0;
 	}
-}
-AtomPtr list_from_array (std::valarray<Real>& in) {
-	AtomPtr l = Atom::make_sequence ();
-	for (unsigned i = 0; i < in.size (); ++i) l->sequence.push_back (Atom::make_number  (in[i]));
-	return l;
-}
-AtomPtr type_check (AtomPtr node, AtomType type, AtomPtr ctx);
-void array_from_list (AtomPtr list, std::valarray<Real>& out) {
-	out.resize (list->sequence.size ());
-	for (unsigned i = 0; i < out.size (); ++i) out[i] = type_check (list->sequence.at (i), AtomType::NUMBER, list)->value;
 }
 // lexing
 std::string get_token (std::istream& input) {
@@ -233,7 +221,7 @@ AtomPtr gets (std::istream& input, int& nesting, const std::string& terminator) 
 			if (token == "{") valid_terminator = "}"; 
 			code->sequence.push_back(gets(input, nesting, valid_terminator));
 		} else if (is_number (token)) {
-			code->sequence.push_back(Atom::make_number(atof (token.c_str ())));
+			code->sequence.push_back(Atom::make_array(atof (token.c_str ())));
 		} else if (is_string (token)) {
 			code->sequence.push_back(Atom::make_string(token.substr(1, token.size () - 2)));
 		} else {
@@ -352,7 +340,7 @@ tail_call:
 			}
     		AtomPtr code = split_sequence (params->sequence.at (1));
     		if (type_check (eval (params->sequence.at (0), env), 
-    			AtomType::NUMBER, node)->value) {
+    			AtomType::ARRAY, node)->value) {
 				for (unsigned i = 0; i < code->sequence.size () - 1; ++i) {
 					eval (code->sequence.at (i), env);
 				}
@@ -383,9 +371,11 @@ tail_call:
 // builtins
 std::ostream& puts (AtomPtr node, std::ostream& out, bool is_write = false) {
 	switch (node->type) {
-		case NUMBER:
-			out << node->value;
-		break;
+		case ARRAY:
+			for (unsigned i = 0; i < node->array.size (); ++i) {
+				out << node->array[i] << " ";
+			}
+		break;		
 		case SYMBOL: case STRING:
 			if (node->type == STRING && is_write ) out << "\"" << node->token << "\"";
 			else out << node->token;
@@ -397,11 +387,6 @@ std::ostream& puts (AtomPtr node, std::ostream& out, bool is_write = false) {
 					(i == node->sequence.size () - 1 ? "" : " ");
 			}
 			out << (node->type == STREAM ? "]" : "}");
-		break;
-		case ARRAY:
-			for (unsigned i = 0; i < node->array.size (); ++i) {
-				out << node->array[i] << " ";
-			}
 		break;
 		case PROC:
 			if (node->sequence.size () < 3) return out;
@@ -452,10 +437,10 @@ bool unset (AtomPtr k, AtomPtr env) {
 AtomPtr fn_unset (AtomPtr b,  AtomPtr env) {
 	for (unsigned i = 0; i < b->sequence.size (); ++i) {
 		if (!unset(b->sequence.at (i), env)) {
-			return Atom::make_number(0);
+			return Atom::make_array(0);
 		}	
 	}
-	return Atom::make_number(1);
+	return Atom::make_array(1);
 }
 template <bool dynamic>
 AtomPtr fn_lambda (AtomPtr n, AtomPtr env) {
@@ -486,7 +471,7 @@ AtomPtr fn_info (AtomPtr b, AtomPtr env) {
 			} catch (...) {
 				ans = 0;
 			}    	
-			l->sequence.push_back(Atom::make_number(ans));
+			l->sequence.push_back(Atom::make_array(ans));
 		}
 	} else if (cmd == "typeof") {
     	for (unsigned i = 1; i < b->sequence.size (); ++i) {
@@ -502,14 +487,14 @@ AtomPtr fn_list (AtomPtr node, AtomPtr env) {
 }
 AtomPtr fn_lindex (AtomPtr params, AtomPtr env) {
 	AtomPtr l = type_check (params->sequence.at (0), AtomType::LIST, params);
-	int i = (int) (type_check(params->sequence.at (1), AtomType::NUMBER, params)->value);
+	int i = (int) (type_check(params->sequence.at (1), AtomType::ARRAY, params)->array[0]);
 	if (i < 0 || i >= l->sequence.size ()) return Atom::make_sequence();
 	return l->sequence.at(i);
 }
 AtomPtr fn_lrange (AtomPtr params, AtomPtr env) {
 	AtomPtr l = type_check (params->sequence.at (0), AtomType::LIST, params);
-	int i = (int) (type_check(params->sequence.at (1), AtomType::NUMBER, params)->value);
-	int e = (int) (type_check(params->sequence.at (2), AtomType::NUMBER, params)->value);
+	int i = (int) (type_check(params->sequence.at (1), AtomType::ARRAY, params)->array[0]);
+	int e = (int) (type_check(params->sequence.at (2), AtomType::ARRAY, params)->array[0]);
 	if (i < 0 || i >= l->sequence.size () || e < 0 || e >= l->sequence.size () || e < i) {
 		return Atom::make_sequence();
 	}
@@ -519,7 +504,7 @@ AtomPtr fn_lrange (AtomPtr params, AtomPtr env) {
 }
 AtomPtr fn_llength (AtomPtr params, AtomPtr env) {
 	AtomPtr l = type_check (params->sequence.at (0), AtomType::LIST, params);
-	return Atom::make_number (l->sequence.size ());
+	return Atom::make_array (l->sequence.size ());
 }
 AtomPtr fn_ljoin (AtomPtr params, AtomPtr env) {
 	AtomPtr dst = type_check (params->sequence.at (0), AtomType::LIST, params);
@@ -536,7 +521,7 @@ AtomPtr fn_ljoin (AtomPtr params, AtomPtr env) {
 AtomPtr fn_while (AtomPtr b,  AtomPtr env) {
 	AtomPtr res = Atom::make_sequence();
 	AtomPtr code = split_sequence (type_check (b->sequence.at (1), AtomType::LIST, b));
-	while (type_check (eval (b->sequence. at (0), env), AtomType::NUMBER, b)->value) {
+	while (type_check (eval (b->sequence. at (0), env), AtomType::ARRAY, b)->array[0]) {
 		for (unsigned i = 0; i < code->sequence.size (); ++i) {
 			res = eval (code->sequence.at (i), env);
 			if (res->token == "continue") ++i;
@@ -601,7 +586,7 @@ AtomPtr fn_format (AtomPtr node, AtomPtr env) {
 			if (!out.good ()) return Atom::make_sequence ();
 			out << tmp.str ();
 			out.close ();
-			return Atom::make_number(1);
+			return Atom::make_array(1);
 		break;	
 	}
 }
@@ -632,71 +617,81 @@ AtomPtr source (const std::string& name, AtomPtr env) {
 AtomPtr fn_source (AtomPtr b,  AtomPtr env) {
     return source (type_check (b->sequence.at (0), AtomType::STRING, b)->token, env);
 }
-// #define MAKE_BINOP(op,name, unit)									\
-// 	AtomPtr name (AtomPtr n, AtomPtr env) {						\
-// 		if (n->sequence.size () == 1) {										\
-// 			return Atom::make_number(unit							\
-// 				op (type_check (n->sequence.at(0), AtomType::NUMBER, n)->value));								\
-// 		}															\
-// 		AtomPtr c = n;												\
-// 		Real s = (type_check (n->sequence.at(0), AtomType::NUMBER, n)->value);									\
-// 		for (unsigned i = 1; i < n->sequence.size (); ++i) {					\
-// 			s = s op type_check (n->sequence.at(i), AtomType::NUMBER, n)->value;								\
-// 		}															\
-// 		return Atom::make_number (s);								\
-// 	}			
-
-// #define MAKE_CMPOP(op,fn_name) \
-// 	AtomPtr fn_name (AtomPtr n, AtomPtr env) { \
-// 		Real base = 1; \
-// 		for (unsigned i = 0; i < n->sequence.size () - 1; ++i) { \
-// 			if (!(type_check (n->sequence.at(i), AtomType::NUMBER, n)->value op \
-// 				type_check (n->sequence.at(i + 1), AtomType::NUMBER, n)->value)) { \
-// 				base = 0; \
-// 			} \
-// 		} \
-// 		return Atom::make_number (base); \
-// 	} \
-
-// #define MAKE_SINGOP(op,fn_name) \
-// 	AtomPtr fn_name (AtomPtr n, AtomPtr env) { \
-// 		return Atom::make_number (op(type_check (n->sequence.at(0), AtomType::NUMBER, n)->value)); \
-// 	} \
-
-// MAKE_BINOP(+,fn_add,0);
-// MAKE_BINOP(-,fn_sub,0);
-// MAKE_BINOP(*,fn_mul,1);
-// MAKE_BINOP(/,fn_div,1);
-// MAKE_CMPOP(<,fn_less);
-// MAKE_CMPOP(>,fn_gt);
-// MAKE_CMPOP(<=,fn_lesseq);
-// MAKE_CMPOP(>=,fn_gteq);
-// MAKE_SINGOP(sin, fn_sin);
-// MAKE_SINGOP(cos,fn_cos);
-// MAKE_SINGOP(log, fn_log);
-// MAKE_SINGOP(exp, fn_exp);
-// MAKE_SINGOP(fabs, fn_fabs);
-// MAKE_SINGOP (sqrt,fn_sqrt);
-// MAKE_SINGOP (floor, fn_floor);
 AtomPtr fn_eq (AtomPtr n, AtomPtr env) {
-	return Atom::make_number(atom_eq (n->sequence.at(0), n->sequence.at(1)));
+	return Atom::make_array(atom_eq (n->sequence.at(0), n->sequence.at(1)));
+}
+void array_from_list (AtomPtr list, std::valarray<Real>& out) {
+	out.resize (list->sequence.size ());
+	for (unsigned i = 0; i < out.size (); ++i) {
+		out[i] = type_check (list->sequence.at (i), AtomType::ARRAY, list)->array[0];
+	}
 }
 AtomPtr fn_array (AtomPtr n, AtomPtr env) {
 	std::valarray<Real> v;
 	array_from_list (n, v);
 	return Atom::make_array(v);
 }
+#error TYPE CONTROL!!
 #define MAKE_ARRAYBINOP(op,name)									\
 	AtomPtr name (AtomPtr n, AtomPtr env) {						\
-		std::valarray<Real> v = (n->sequence.at (0)->array op n->sequence.at (1)->array); \
+		if (n->sequence.at (0)->array.size () != n->sequence.at (1)->array.size ()) error ("array must have the same size in", n);\
+		std::valarray<Real> v (n->sequence.at (0)->array op n->sequence.at (1)->array); \
 		return  Atom::make_array (v); \
 	}\
 
-MAKE_ARRAYBINOP (+, fn_array_add);
-MAKE_ARRAYBINOP (-, fn_array_sub);
-MAKE_ARRAYBINOP (*, fn_array_mul);
-MAKE_ARRAYBINOP (/, fn_array_div);
+MAKE_ARRAYBINOP (+, fn_add);
+MAKE_ARRAYBINOP (-, fn_sub);
+MAKE_ARRAYBINOP (*, fn_mul);
+MAKE_ARRAYBINOP (/, fn_div);
 
+#define MAKE_ARRAYCMPOP(op,name)									\
+	AtomPtr name (AtomPtr n, AtomPtr env) {						\
+		if (n->sequence.at (0)->array.size () != n->sequence.at (1)->array.size ()) error ("array must have the same size in", n); \
+		std::valarray<bool> b (n->sequence.at (0)->array op n->sequence.at (1)->array); \
+		std::valarray<Real> v (b.size ()); \
+		for (unsigned i = 0; i < v.size (); ++i) v[i] = (Real) b[i];\
+		return  Atom::make_array (v); \
+	}\
+
+MAKE_ARRAYCMPOP (==, fn_same);
+MAKE_ARRAYCMPOP (!=, fn_different);
+MAKE_ARRAYCMPOP (<, fn_less);
+MAKE_ARRAYCMPOP (<=, fn_lesseq);
+MAKE_ARRAYCMPOP (>, fn_gt);
+MAKE_ARRAYCMPOP (>=, fn_gteq);
+
+#define MAKE_ARRAYSINGOP(op,name)									\
+	AtomPtr name (AtomPtr n, AtomPtr env) {						\
+		std::valarray<Real> v = op (n->sequence.at (0)->array); \
+		return  Atom::make_array (v); \
+	}\
+
+MAKE_ARRAYSINGOP (std::abs, fn_abs);
+MAKE_ARRAYSINGOP (exp, fn_exp);
+MAKE_ARRAYSINGOP (log, fn_log);
+MAKE_ARRAYSINGOP (log10, fn_log10);
+MAKE_ARRAYSINGOP (sqrt, fn_sqrt);
+MAKE_ARRAYSINGOP (sin, fn_sin);
+MAKE_ARRAYSINGOP (cos, fn_cos);
+MAKE_ARRAYSINGOP (tan, fn_tan);
+
+#define MAKE_ARRAYMETHODS(op,name)									\
+	AtomPtr name (AtomPtr n, AtomPtr env) {						\
+		return  Atom::make_array (n->sequence.at (0)->array.op ()); \
+	}\
+
+MAKE_ARRAYMETHODS (min, fn_min);
+MAKE_ARRAYMETHODS (max, fn_max);
+MAKE_ARRAYMETHODS (sum, fn_sum);
+MAKE_ARRAYMETHODS (size, fn_size);
+AtomPtr fn_mean (AtomPtr node, AtomPtr env) {
+	return Atom::make_array (node->sequence.at (0)->array.sum () / node->sequence.at (0)->array.size ());
+}
+AtomPtr fn_pow (AtomPtr node, AtomPtr env) {
+	if (node->sequence.at (0)->array.size () != node->sequence.at (1)->array.size ()) error ("array must have the same size in", node);
+	std::valarray<Real> v = std::pow (node->sequence.at (0)->array,  node->sequence.at (1)->array);
+	return Atom::make_array (v);
+}
 void replace (std::string &s, std::string from, std::string to) {
     int idx = 0;
     int next;
@@ -710,18 +705,18 @@ AtomPtr fn_string (AtomPtr node, AtomPtr env) {
 	AtomPtr l = Atom::make_sequence();
 	std::regex r;
 	if (cmd == "length") {
-		return Atom::make_number(type_check (node->sequence.at(1), AtomType::STRING, node)->token.size ());
+		return Atom::make_array(type_check (node->sequence.at(1), AtomType::STRING, node)->token.size ());
 	} else if (cmd == "find") {
 		if (node->sequence.size () < 3) error ("invalid number of arguments in", node);
 		unsigned long pos = type_check (node->sequence.at(1), AtomType::STRING, node)->token.find (
 			type_check (node->sequence.at(2), AtomType::STRING, node)->token);
-		if (pos == std::string::npos) return Atom::make_number (-1);
-		else return Atom::make_number (pos);		
+		if (pos == std::string::npos) return Atom::make_array (-1);
+		else return Atom::make_array (pos);		
     } else if (cmd == "range") {
     	if (node->sequence.size () < 4) error ("invalid number of arguments in", node);
 		std::string tmp = type_check (node->sequence.at(1), AtomType::STRING, node)->token.substr(
-			type_check (node->sequence.at(2), AtomType::NUMBER, node)->value, 
-			type_check (node->sequence.at(3), AtomType::NUMBER, node)->value);
+			type_check (node->sequence.at(2), AtomType::ARRAY, node)->array[0], 
+			type_check (node->sequence.at(3), AtomType::ARRAY, node)->array[0]);
 		return Atom::make_string (tmp);		
 	} else if (cmd == "replace") {
 		if (node->sequence.size () < 4) error ("invalid number of arguments in", node);
@@ -748,7 +743,7 @@ AtomPtr fn_string (AtomPtr node, AtomPtr env) {
     return l;
 }
 AtomPtr fn_exec (AtomPtr node, AtomPtr env) {
-	return Atom::make_number (system (
+	return Atom::make_array (system (
 		type_check (node->sequence.at(0), AtomType::STRING, node)->token.c_str ()));
 }
 AtomPtr fn_exit (AtomPtr node, AtomPtr env) {
@@ -790,13 +785,12 @@ AtomPtr fn_import (AtomPtr params, AtomPtr env) {
 		if (f) {
 			add_builtin(params->sequence.at(1)->sequence.at(2 * i)->token, 
 				f, 
-				type_check (params->sequence.at(1)->sequence.at(2 * i + 1), AtomType::NUMBER, params)->value, env); // silent error
+				type_check (params->sequence.at(1)->sequence.at(2 * i + 1), AtomType::ARRAY, params)->array[0], env); // silent error
 			++ct;
 		}
 	}
-	return ct == 0 ? Atom::make_sequence() : Atom::make_number(ct); // number of proc imported
+	return ct == 0 ? Atom::make_sequence() : Atom::make_array(ct); // number of proc imported
 }
-
 // interface
 AtomPtr make_env () {
 	AtomPtr env = Atom::make_sequence ();
@@ -832,28 +826,32 @@ AtomPtr make_env () {
     add_builtin("source", fn_source, 1, env);
     extend(Atom::make_symbol("nl"), Atom::make_symbol("\n"), env);
     // arithmetics/arrays
-	add_builtin ("+", fn_add, 1, env);
-	add_builtin ("-", fn_sub, 1, env);
-	add_builtin ("*", fn_mul, 1, env);
-	add_builtin ("/", fn_div, 1, env);
-	add_builtin ("<", fn_less, 1, env);
-	add_builtin (">", fn_gt, 1, env);
-	add_builtin ("<=", fn_lesseq, 1, env);
-	add_builtin (">=", fn_gteq, 1, env);	
-	add_builtin ("sin", fn_sin, 1, env);
-	add_builtin ("cos", fn_cos, 1, env);
-	add_builtin ("log", fn_log, 1, env);
-	add_builtin ("exp", fn_exp, 1, env);
-	add_builtin ("abs", fn_fabs, 1, env);
-	add_builtin ("sqrt", fn_sqrt, 1, env);
-	add_builtin ("floor", fn_floor, 1, env);    
     add_builtin("eq", fn_eq, 2, env);
 	add_builtin ("array", fn_array, 0, env);
-	add_builtin ("array", fn_array, 0, env);
-	add_builtin ("add", fn_array_add, 0, env);
-	add_builtin ("sub", fn_array_sub, 0, env);
-	add_builtin ("mul", fn_array_mul, 0, env);
-	add_builtin ("div", fn_array_div, 0, env);
+	add_builtin ("+", fn_add, 2, env);
+	add_builtin ("-", fn_sub, 2, env);
+	add_builtin ("*", fn_mul, 2, env);
+	add_builtin ("/", fn_div, 2, env);
+	add_builtin ("==", fn_same, 2, env);
+	add_builtin ("!=", fn_different, 2, env);
+	add_builtin ("<", fn_less, 2, env);
+	add_builtin (">", fn_gt, 2, env);
+	add_builtin ("<=", fn_lesseq, 2, env);
+	add_builtin (">=", fn_gteq, 2, env);	
+	add_builtin ("pow", fn_pow, 2, env);
+	add_builtin ("log", fn_log, 1, env);
+	add_builtin ("log10", fn_log10, 1, env);
+	add_builtin ("exp", fn_exp, 1, env);
+	add_builtin ("abs", fn_abs, 1, env);
+	add_builtin ("sqrt", fn_sqrt, 1, env);
+	add_builtin ("sin", fn_sin, 1, env);
+	add_builtin ("cos", fn_cos, 1, env);
+	add_builtin ("tan", fn_tan, 1, env);
+	add_builtin ("min", fn_max, 1, env);
+	add_builtin ("max", fn_min, 1, env);
+	add_builtin ("sum", fn_sum, 1, env);
+	add_builtin ("mean", fn_mean, 1, env);
+	add_builtin ("size", fn_size, 1, env);
     //others
 	add_builtin ("string", fn_string, 2, env);
 	add_builtin ("exec", fn_exec, 1, env);
@@ -900,4 +898,3 @@ void repl (AtomPtr env, std::istream& in, std::ostream& out) {
 // EOF
 
 #endif // QUILE_H
-
