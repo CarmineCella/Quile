@@ -19,9 +19,9 @@ dynamic let {b} {
 }
 
 # lists
-proc car {x} {lindex $x 0}
-proc cdr {x} {lrange $x 1 [- [llength $x] 1]}
-proc second {x} {car [cdr $x]}
+proc lindex {l i} {car [lrange $l $i 1]}
+proc cdr {l} {lrange $l 1 [- [llength $l] 1]}
+proc second {l} {car [cdr $l]}
 proc llast {l} {lindex  $l [- [llength $l] 1]}
 proc ltake {l n} {lrange $l 0 [- $n 1]}
 proc ldrop {l n} {
@@ -36,7 +36,6 @@ proc lrepeat {n l} {
 		ljoin [list] $l [lrepeat [- $n 1] $l]
 	}
 }
-
 proc lsplit {l n} {
 	list [lrange $l 0 [- $n 1]] [ldrop $l $n]
 }
@@ -119,7 +118,7 @@ proc test {x y} {
 	if {eq $res $y} {
 		puts $x " passed" $nl 
 	} else {
-		throw [tostr "*** FAILED *** " $x "produced " $res " vs " $y]
+		throw [tostr "*** FAILED *** " $x ": "  $res " vs " $y]
 	}
 }	
 

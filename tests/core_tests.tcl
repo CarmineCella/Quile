@@ -7,16 +7,16 @@ source "core.tcl"
 
 puts $nl "--- builtin operators ---" $nl
 
-test {list 1 2 3 4}{1 2 3 4}
+test {list 1 2 3 4}{1 2 3 4} 
 test {ljoin [list] 1 2 {3 4}}{1 2 3 4}
-test {car {1 b c}}{1}
+test {car {1 b c}}{ 1}
 test {car {{}}} {}
 test {cdr {}}{}
 test {cdr {a b c}}{b c}
 test {cdr {}} {}
-test {if {eq 1 1} {pass 1}}{1}
-test {if {eq 1 0} {pass 1}}{}
-test {if {eq 1 0} {pass 1} else {pass 2}}{2}
+test {if {eq 1 1} {array 1}}{1}
+test {if {eq 1 0} {array 1}}{}
+test {if {eq 1 0} {array 1} else {array 2}}{2}
 set dummy 21
 test {setrec dummy 22}{22}
 test {eq 1 1}{1}
@@ -32,8 +32,8 @@ test {eq + -}{0}
 test {eq $+ $-}{0}
 test {eq "alpha" "alpha"}{1}
 test {eq "alpha" "beta"}{0}
-test {catch {except1 } {throw {except1}} {pass 1}}{1}
-test {catch "except2" {throw "except2"} {pass 1}}{1}
+test {catch {except1 } {throw {except1}} {eval 1}}{1}
+test {catch "except2" {throw "except2"} {eval 1}}{1}
 test {info exists dummy}{1}
 test {info exists not_defined}{0}
 test {info vars "wrong_pattern" }{}
