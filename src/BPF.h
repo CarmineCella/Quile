@@ -4,6 +4,7 @@
 #ifndef BPF_H
 #define BPF_H 
 
+#include <valarray>
 #include <vector>
 
 template <typename T>
@@ -11,7 +12,7 @@ class Processor {
 public:
 	Processor (int len) { _len = len; }
 	virtual ~Processor () {}
-	virtual void process (std::vector<T>& out) = 0;
+	virtual void process (std::valarray<T>& out) = 0;
 	virtual int len () const { return _len; }
 protected:
 	T _len;
@@ -27,7 +28,7 @@ public:
 		Processor<T>::_len = len;
 		_end_val = end_val;
 	}
-	void process (std::vector<T>& out) {
+	void process (std::valarray<T>& out) {
 		int s = Processor<T>::len ();
 		if (out.size () < s) out.resize (s);
 		T val = _init_val;
@@ -58,12 +59,12 @@ public:
 		}
 		return s;
 	}
-	void process (std::vector<T>& out) {
+	void process (std::valarray<T>& out) {
 		int s = len ();
 		if (out.size () < s) out.resize (s);
 		int offset = 0;
 		for (unsigned i = 0; i < _segments.size (); ++i) {
-			std::vector<T> tmp;
+			std::valarray<T> tmp;
 			_segments[i]->process (tmp);
 			for (unsigned k = 0; k < tmp.size (); ++k) {
 				out[k + offset] = tmp[k];

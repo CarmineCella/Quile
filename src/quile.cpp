@@ -1,7 +1,8 @@
 // quile.cpp
 //
 
-#include "quile.h"
+#include "core.h"
+#include "numeric.h"
 
 #include <iostream>
 #include <sstream>
@@ -16,7 +17,7 @@ const char* VERSION[] = {"0.3"};
 
 int main (int argc, char* argv[]) {
 	AtomPtr env = make_env (); // master environment
-
+	add_numeric (env);
 	try {
 		bool interactive = false;
 		int opt = 0;

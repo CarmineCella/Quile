@@ -10,8 +10,11 @@
 
 #include "core.h"
 
+#include <vector>
+#include <valarray>
+
 // SUPPORT  -----------------------------------------------------------------------
-void gen10 (const std::vector<Real>& coeff, std::vector<Real>& values) {
+void gen10 (const std::valarray<Real>& coeff, std::valarray<Real>& values) {
 	for (unsigned i = 0; i < values.size () - 1; ++i) {
 		values[i] = 0;
 		for (unsigned j = 0; j < coeff.size (); ++j) {
@@ -57,134 +60,54 @@ void deinterleave (const T* stereo, T* l, T* r, int n) {
 		r[i] = stereo[2 * i + 1];
 	}
 }	
-SexprPtr list_from_vector (const std::vector<Real>& inv) {
-	SexprPtr l = Sexpr::make_list ();
-	for (unsigned i = 0; i < inv.size (); ++i) l->tail.push_back (Sexpr::make_number (inv.at (i)));
-	return l;
-}
-std::vector<Real> vector_from_list (SexprPtr l) {
-	std::vector<Real> outv;
-	for (unsigned i = 0; i < l->tail.size (); ++i) outv.push_back (type_check (l->tail.at (i), SexprType::NUMBER)->value);
-	return outv;
-}
-// VECTORS -----------------------------------------------------------------------
-#define MAKE_VECBINOP(op,name)	\
-	SexprPtr name (SexprPtr n, SexprPtr env) {	\
-		std::vector<Real> c = vector_from_list (type_check (n->tail.at (0), SexprType::LIST)); \
-		if (c.size () < 1) return Sexpr::make_list (); \
-		for (unsigned i = 1; i < n->tail.size (); ++i) {	\
-			for (unsigned k = 0; k < c.size (); ++k) { \
-				SexprPtr b = n->tail.at (i);\
-				if (b->tail.size () < 1) break; \
-				if (c.size () != b->tail.size ()) error ("incompatible list size", n);\
-				c.at (k) = c.at (k) op type_check (b->tail.at(k), SexprType::NUMBER)->value; \
-			} \
-		}\
-		return list_from_vector (c);	\
-	} \
-
-MAKE_VECBINOP (+, addv_fn);
-MAKE_VECBINOP (-, subv_fn);
-MAKE_VECBINOP (*, mulv_fn);
-MAKE_VECBINOP (/, divv_fn);
-
-#define MAKE_VECMINMAX(op,name)	\
-SexprPtr name (SexprPtr n, SexprPtr env) { \
-	std::vector<Real> c = vector_from_list (type_check (n->tail.at (0), SexprType::LIST)); \
-	if (c.size () < 1) return Sexpr::make_list (); \
-	Real m = c.at (0); \
-	for (unsigned i = 1; i < c.size (); ++i) { \
-		if (c.at (i) op m) m = c.at (i); \
-	} \
-	return Sexpr::make_number(m); \
-} \
-
-MAKE_VECMINMAX (<, minv_fn);
-MAKE_VECMINMAX (>, maxv_fn);
-
-#define MAKE_VECSUMMEAN(name,is_mean) \
-SexprPtr name (SexprPtr n, SexprPtr env) { \
-	std::vector<Real> c = vector_from_list (type_check (n->tail.at (0), SexprType::LIST)); \
-	if (c.size () < 1) return Sexpr::make_list (); \
-	Real m = c.at (0); \
-	for (unsigned i = 1; i < c.size (); ++i) { \
-		m += c.at (i); \
-	} \
-	if (is_mean) m /= c.size (); \
-	return Sexpr::make_number(m);  \
-} \
-
-MAKE_VECSUMMEAN (sumv_fn, 0);
-MAKE_VECSUMMEAN (mean_fn, 1);
-
-#define MAKE_VECSINGOP(op, name) \
-SexprPtr name (SexprPtr n, SexprPtr env) { \
-	std::vector<Real> c = vector_from_list (type_check (n->tail.at (0), SexprType::LIST)); \
-	if (c.size () < 1) return Sexpr::make_list (); \
-	for (unsigned i = 0; i < c.size (); ++i) { \
-		Real m = c.at (i); \
-		c.at(i) = op (m); \
-	} \
-	return list_from_vector (c);  \
-} \
-
-MAKE_VECSINGOP (sin, sinv_fn);
-MAKE_VECSINGOP (cos, cosv_fn);
-MAKE_VECSINGOP (exp, expv_fn);
-MAKE_VECSINGOP (log, logv_fn);
-MAKE_VECSINGOP (sqrt, sqrtv_fn);
-MAKE_VECSINGOP (fabs, absv_fn);
-MAKE_VECSINGOP (floor, floorv_fn);
-
-SexprPtr bpf_fn (SexprPtr node, SexprPtr env) {
-	Real init = type_check (node->tail.at (0), SexprType::NUMBER)->value;
-	int len  = (int) type_check (node->tail.at (1), SexprType::NUMBER)->value;
-	Real end = type_check (node->tail.at (2), SexprType::NUMBER)->value;
-	node->tail.pop_front (); node->tail.pop_front (); node->tail.pop_front ();
-	if (node->tail.size () % 2 != 0) error ("invalid number of arguments", node);
+// NUMERIC --------------------------------------------------------------------------------------
+AtomPtr fn_bpf (AtomPtr node, AtomPtr env) {
+	Real init = type_check (node->sequence.at (0), AtomType::ARRAY, node)->array[0];
+	int len  = (int) type_check (node->sequence.at (1), AtomType::ARRAY, node)->array[0];
+	Real end = type_check (node->sequence.at (2), AtomType::ARRAY, node)->array[0];
+	node->sequence.pop_front (); node->sequence.pop_front (); node->sequence.pop_front ();
+	if (node->sequence.size () % 2 != 0) error ("invalid number of arguments for bpf", node);
 	BPF<Real> bpf (len);
 	bpf.add_segment (init, len, end);
 	Real curr = end;
-	for (unsigned i = 0; i < node->tail.size () / 2; ++i) {
-		int len  = (int) type_check (node->tail.at (i * 2), SexprType::NUMBER)->value;
-		Real end = type_check (node->tail.at (i * 2 + 1), SexprType::NUMBER)->value;
+	for (unsigned i = 0; i < node->sequence.size () / 2; ++i) {
+		int len  = (int) type_check (node->sequence.at (i * 2), AtomType::ARRAY, node)->array[0];
+		Real end = type_check (node->sequence.at (i * 2 + 1), AtomType::ARRAY, node)->array[0];
 		bpf.add_segment (curr, len, end);
 		curr = end;
 	}
-	std::vector<Real> out;
+	std::valarray<Real> out;
 	bpf.process (out);
-	return list_from_vector (out);
+	return Atom::make_array (out);
 }
-SexprPtr mix_fn (SexprPtr node, SexprPtr env) {
+AtomPtr fn_mix (AtomPtr node, AtomPtr env) {
 	std::vector<Real> out;
-	if (node->tail.size () % 2 != 0) error ("invalid number of arguments", node);
-	for (unsigned i = 0; i < node->tail.size () / 2; ++i) {
-		int p = (int) type_check (node->tail.at (i * 2), SexprType::NUMBER)->value;
-		SexprPtr l = type_check (node->tail.at (i * 2 + 1), SexprType::LIST);
-		int len = (int) (p + l->tail.size ());
-		if (len > out.size ()) out.resize (len);
-		for (unsigned t = 0; t < l->tail.size (); ++t) {
-			out.at (t + p) += type_check (l->tail.at (t), SexprType::NUMBER)->value;
+	if (node->sequence.size () % 2 != 0) error ("invalid number of arguments for mix", node);
+	for (unsigned i = 0; i < node->sequence.size () / 2; ++i) {
+		int p = (int) type_check (node->sequence.at (i * 2), AtomType::ARRAY, node)->array[0];
+		AtomPtr l = type_check (node->sequence.at (i * 2 + 1), AtomType::ARRAY, node);
+		int len = (int) (p + l->array.size ());
+		if (len > out.size ()) out.resize (len, 0);
+		// out[std::slice(p, len, 1)] += l->array;
+		for (unsigned t = 0; t < l->array.size (); ++t) {
+			out[t + p] += l->array[t];
 		}
 	}
-	return list_from_vector (out);
+	std::valarray<Real> v (out.data(), out.size());
+	return Atom::make_array (v);
 }
-SexprPtr gen_fn (SexprPtr node, SexprPtr env) {
-	int len = (int) type_check (node->tail.at (0), SexprType::NUMBER)->value;
-	std::vector<Real> coeffs;
-	for (unsigned i = 1; i < node->tail.size(); ++i) {
-		Real v = type_check (node->tail.at (i), SexprType::NUMBER)->value;
-		coeffs.push_back (v);
-	}
-	std::vector<Real> table (len + 1); 
+AtomPtr fn_gen (AtomPtr node, AtomPtr env) {
+	int len = (int) type_check (node->sequence.at (0), AtomType::ARRAY, node)->array[0];
+	std::valarray<Real> coeffs = type_check (node->sequence.at (1), AtomType::ARRAY, node)->array;
+	std::valarray<Real> table (len + 1); 
 	gen10 (coeffs, table);
-	return list_from_vector (table);
+	return Atom::make_array (table);
 }
-SexprPtr osc_fn (SexprPtr node, SexprPtr env) {
-	Real sr = type_check (node->tail.at (0), SexprType::NUMBER)->value;
-	std::vector<Real> freqs = vector_from_list (type_check (node->tail.at (1), SexprType::LIST));
-	std::vector<Real> table = vector_from_list (type_check (node->tail.at (2), SexprType::LIST));
-	std::vector<Real> out (freqs.size ());
+AtomPtr fn_osc (AtomPtr node, AtomPtr env) {
+	Real sr = type_check (node->sequence.at (0), AtomType::ARRAY, node)->array[0];
+	std::valarray<Real> freqs = type_check (node->sequence.at (1), AtomType::ARRAY, node)->array;
+	std::valarray<Real> table = type_check (node->sequence.at (2), AtomType::ARRAY, node)->array;
+	std::valarray<Real> out (freqs.size ());
 	int N = table.size () - 1;
 	Real fn = (Real) sr / N; // Hz
 	Real phi = 0; //rand () % (N - 1);
@@ -192,55 +115,49 @@ SexprPtr osc_fn (SexprPtr node, SexprPtr env) {
 		int intphi = (int) phi;
 		Real fracphi = phi - intphi;
 		Real c = (1 - fracphi) * table[intphi] + fracphi * table[intphi + 1];
-		out.at (i) = c;
-		phi = phi + freqs.at (i) / fn;
+		out[i] = c;
+		phi = phi + freqs[i] / fn;
 		if (phi >= N) phi = phi - N;
 	}
-	return list_from_vector (out);
+	return Atom::make_array (out);
 }
-SexprPtr compute_fft (SexprPtr n, int sign) {
-    std::vector<Real> d = vector_from_list (n);
- 	int N = next_pow2 (d.size ());
-    fft<Real> (&d[0], N / 2, sign);
+template <int sign>
+AtomPtr fn_fft (AtomPtr n, AtomPtr env) {
+    std::valarray<Real> inout = type_check (n->sequence.at (0), AtomType::ARRAY, n)->array;
+ 	int N = next_pow2 (inout.size ());
+    fft<Real> (&inout[0], N / 2, sign);
   	int norm = (sign < 0 ? 1 : N / 2);
-    SexprPtr res = Sexpr::make_list ();
-    for (unsigned i = 0; i < N; ++i) { res->tail.push_back (Sexpr::make_number(d[i] / norm)); }
-    return res;
+	for (unsigned i = 0; i < N; ++i) inout[i] /= norm;	
+	return Atom::make_array (inout);
 }
-SexprPtr fft_fn (SexprPtr n, SexprPtr env) {
-    return compute_fft (type_check (n->tail.at (0), SexprType::LIST), -1);
+AtomPtr fn_car2pol (AtomPtr n, AtomPtr env) {
+	std::valarray<Real> inout = type_check (n->sequence.at (0), AtomType::ARRAY, n)->array;
+	rect2pol (&inout[0], inout.size () / 2);
+	return Atom::make_array (inout);
 }
-SexprPtr ifft_fn (SexprPtr n, SexprPtr env) {
-    return compute_fft (type_check (n->tail.at (0), SexprType::LIST), 1);
+AtomPtr fn_pol2car (AtomPtr n, AtomPtr env) {
+ 	std::valarray<Real> inout = type_check (n->sequence.at (0), AtomType::ARRAY, n)->array;
+	pol2rect (&inout[0], inout.size () / 2);
+	return Atom::make_array (inout);
 }
-SexprPtr car2pol_fn (SexprPtr n, SexprPtr env) {
-	std::vector<Real> c = vector_from_list (n->tail.at (0));
-	rect2pol (&c[0], c.size () / 2);
-	return list_from_vector (c);
-}
-SexprPtr pol2car_fn (SexprPtr n, SexprPtr env) {
- 	std::vector<Real> c = vector_from_list (n->tail.at (0));
-	pol2rect (&c[0], c.size () / 2);
-	return list_from_vector (c);
-}
-SexprPtr conv_fn (SexprPtr n, SexprPtr env) {
-    SexprPtr ir = type_check (n->tail.at (0), SexprType::LIST);
-    SexprPtr sig = type_check (n->tail.at (1), SexprType::LIST);
-    Real scale = type_check(n->tail.at (2), SexprType::NUMBER)->value;
+AtomPtr fn_conv (AtomPtr n, AtomPtr env) {
+    std::valarray<Real> ir = type_check (n->sequence.at (0), AtomType::ARRAY, n)->array;
+    std::valarray<Real> sig = type_check (n->sequence.at (1), AtomType::ARRAY, n)->array;
+    Real scale = type_check(n->sequence.at (2), AtomType::ARRAY, n)->array[0];
 	Real mix = 0;
-	if (n->tail.size () == 4) mix = type_check(n->tail.at (3), SexprType::NUMBER)->value;
-    long irsamps = ir->tail.size ();
-    long sigsamps = sig->tail.size ();
-    if (irsamps <= 0 || sigsamps <= 0) return Sexpr::make_list();
+	if (n->sequence.size () == 4) mix = type_check(n->sequence.at (3), AtomType::ARRAY, n)->array[0];
+    long irsamps = ir.size ();
+    long sigsamps = sig.size ();
+    if (irsamps <= 0 || sigsamps <= 0) error ("invalid lengths for conv", n);
     int max = irsamps > sigsamps ? irsamps : sigsamps;
     int N = next_pow2(max) << 1;
-    Real* fbuffir = new Real[2 * N];
-    Real* fbuffsig = new Real[2 * N];
-    Real* fbuffconv = new Real[2 * N];
+	std::valarray<Real> fbuffir(2 * N);
+	std::valarray<Real> fbuffsig(2 * N);
+	std::valarray<Real> fbuffconv(2 * N);
     for (unsigned i = 0; i < N; ++i) {
-        if (i < irsamps) fbuffir[2 * i] = type_check (ir->tail.at(i), SexprType::NUMBER)->value;
+        if (i < irsamps) fbuffir[2 * i] = ir[i];
         else fbuffir[2 * i] = 0;
-        if (i < sigsamps) fbuffsig[2 * i] = type_check (sig->tail.at(i), SexprType::NUMBER)->value;
+        if (i < sigsamps) fbuffsig[2 * i] = sig[i];
         else fbuffsig[2 * i] = 0;
         fbuffconv[2 * i] = 0;
         fbuffir[2 * i + 1] = 0;
@@ -248,91 +165,72 @@ SexprPtr conv_fn (SexprPtr n, SexprPtr env) {
         fbuffconv[2 * i + 1] = 0;        
     }
     AbstractFFT<Real>* fft = createFFT<Real>(N);
-    fft->forward(fbuffir);
-    fft->forward(fbuffsig);
-    complexMultiplyReplace(fbuffir, fbuffsig, fbuffconv, N);
-    fft->inverse(fbuffconv);
-    SexprPtr wave = Sexpr::make_list();
+    fft->forward(&fbuffir[0]);
+    fft->forward(&fbuffsig[0]);
+    complexMultiplyReplace(&fbuffir[0], &fbuffsig[0], &fbuffconv[0], N);
+    fft->inverse(&fbuffconv[0]);
+	std::valarray<Real> out  (irsamps + sigsamps - 1);
     for (unsigned i = 0; i < (irsamps + sigsamps) -1; ++i) {
-        Real s = scale * fbuffconv[2 * i] / (2 * N);
-        if (i < sigsamps) s+= sig->tail.at(i)->value * mix;
-        wave->tail.push_back(Sexpr::make_number(s));
+        Real s = scale * fbuffconv[2 * i] / N;
+        if (i < sigsamps) s+= sig[i] * mix;
+        out[i] = s;
     }
-    delete [] fbuffir;
-    delete [] fbuffsig;
-    delete [] fbuffconv;
-    return wave;
+    return Atom::make_array (out);
 }
-// I/O  -----------------------------------------------------------------------
-SexprPtr sndwrite_fn (SexprPtr node, SexprPtr env) {
-	Real sr = type_check (node->tail.at (0), SexprType::NUMBER)->value;
-	std::vector<Real> vals;
-	if (node->tail.size () == 3) {
-		WavOutFile outf (type_check (node->tail.at (1), SexprType::STRING)->lexeme.c_str(), sr, 16, 1);
-		vals = vector_from_list (type_check (node->tail.at (2), SexprType::LIST));
+// // I/O  -----------------------------------------------------------------------
+AtomPtr fn_sndwrite (AtomPtr node, AtomPtr env) {
+	Real sr = type_check (node->sequence.at (0), AtomType::ARRAY, node)->array[0];
+	std::valarray<Real> vals;
+	if (node->sequence.size () == 3) {
+		WavOutFile outf (type_check (node->sequence.at (1), AtomType::STRING, node)->token.c_str(), sr, 16, 1);
+		vals = type_check (node->sequence.at (2), AtomType::ARRAY, node)->array;
 		outf.write (&vals[0], vals.size ());
-	} else if (node->tail.size () == 4) {
-		WavOutFile outf (type_check (node->tail.at (1), SexprType::STRING)->lexeme.c_str(), sr, 16, 2);
-		std::vector<Real> left = vector_from_list (type_check (node->tail.at (2), SexprType::LIST));
-		std::vector<Real> right = vector_from_list (type_check (node->tail.at (3), SexprType::LIST));
+	} else if (node->sequence.size () == 4) {
+		WavOutFile outf (type_check (node->sequence.at (1), AtomType::STRING, node)->token.c_str(), sr, 16, 2);
+		std::valarray<Real> left = type_check (node->sequence.at (2), AtomType::ARRAY, node)->array;
+		std::valarray<Real> right = type_check (node->sequence.at (3), AtomType::ARRAY, node)->array;
 		vals.resize (2 * left.size ());
 		interleave (&vals[0], &left[0], &right[0], left.size ());
 		outf.write (&vals[0], vals.size ());
-	} else error ("invalid number of channels in", node->tail.at(0));
+	} else error ("invalid number of channels in", node->sequence.at(0));
 	
-	return Sexpr::make_number (vals.size ());
+	return Atom::make_array (vals.size ());
 }
-SexprPtr sndread_fn (SexprPtr node, SexprPtr env) {
-	WavInFile inf (type_check (node->tail.at (0), SexprType::STRING)->lexeme.c_str());
-	SexprPtr l = Sexpr::make_list ();
-	int s = inf.getNumSamples ();
-	std::vector<Real> input (s);
-	inf.read (&input[0], s);
-	SexprPtr info = Sexpr::make_list ();
-	info->tail.push_back (Sexpr::make_number (inf.getSampleRate ()));
-	info->tail.push_back (Sexpr::make_number (inf.getNumChannels ()));
-	info->tail.push_back (Sexpr::make_number (s));
-	l->tail.push_back (info);
-	if (inf.getNumChannels () == 1) {
-		l->tail.push_back (list_from_vector (input));
-	} else if (inf.getNumChannels () == 2) {
-		std::vector<Real> left (s/2);
-		std::vector<Real> right (s/2);
+AtomPtr fn_sndread (AtomPtr node, AtomPtr env) {
+	WavInFile infile (type_check (node->sequence.at (0), AtomType::STRING, node)->token.c_str());
+	AtomPtr l = Atom::make_sequence ();
+	int s = infile.getNumSamples ();
+	std::valarray<Real> input (s);
+	infile.read (&input[0], s);
+	std::valarray<Real> info (3);
+	info[0] = infile.getSampleRate ();
+	info[1] = infile.getNumChannels ();
+	info[2] = s;
+	l->sequence.push_back (Atom::make_array (info));
+	if (infile.getNumChannels () == 1) {
+		l->sequence.push_back (Atom::make_array (input));
+	} else if (infile.getNumChannels () == 2) {
+		std::valarray<Real> left (s/2);
+		std::valarray<Real> right (s/2);
 		deinterleave (&input[0], &left[0], &right[0], s);
-		l->tail.push_back (list_from_vector (left));
-		l->tail.push_back (list_from_vector (right));
-	} else error ("invalid number of channels in", node->tail.at (0));
+		l->sequence.push_back (Atom::make_array (left));
+		l->sequence.push_back (Atom::make_array (right));
+	} else error ("invalid number of channels in", node->sequence.at (0));
 	return l;
 }
-void add_numeric (SexprPtr env) {
-	// vector operations
-	add_op ("add", addv_fn, 2, env);
-	add_op ("sub", subv_fn, 2, env);
-	add_op ("mul", mulv_fn, 2, env);
-	add_op ("div", divv_fn, 2, env);
-	add_op ("min", minv_fn, 1, env);
-	add_op ("max", maxv_fn, 1, env);
-	add_op ("sum", sumv_fn, 1, env);
-	add_op ("mean", mean_fn, 1, env);
-	add_op ("sinv", sinv_fn, 1, env);
-	add_op ("cosv", cosv_fn, 1, env);
-	add_op ("expv", expv_fn, 1, env);
-	add_op ("logv", logv_fn, 1, env);
-	add_op ("sqrtv", sqrtv_fn, 1, env);
-	add_op ("absv", absv_fn, 1, env);
-	add_op ("floorv", floorv_fn, 1, env);
-	add_op ("bpf", bpf_fn, 3, env);
-	add_op ("mix", mix_fn, 2, env);	
-	add_op ("gen", gen_fn, 2, env);
-	add_op ("osc", osc_fn, 3, env);
-	add_op ("fft", fft_fn, 1, env);
-	add_op ("ifft", ifft_fn, 1, env);
-	add_op ("car2pol", car2pol_fn, 1, env);
-	add_op ("pol2car", pol2car_fn, 1, env);
-	add_op ("conv", conv_fn, 3, env);
-	// I/O
-	add_op ("sndwrite", sndwrite_fn, 3, env);
-	add_op ("sndread", sndread_fn, 1, env);
+void add_numeric (AtomPtr env) {
+	add_builtin ("bpf", fn_bpf, 3, env);
+	add_builtin ("mix", fn_mix, 2, env);	
+	add_builtin ("gen", fn_gen, 2, env);
+	add_builtin ("osc", fn_osc, 3, env);
+	add_builtin ("fft", fn_fft<1>, 1, env);
+	add_builtin ("ifft", fn_fft<-1>, 1, env);
+	add_builtin ("car2pol", fn_car2pol, 1, env);
+	add_builtin ("pol2car", fn_pol2car, 1, env);
+	add_builtin ("conv", fn_conv, 3, env);
+	// // I/O
+	add_builtin ("sndwrite", fn_sndwrite, 3, env);
+	add_builtin ("sndread", fn_sndread, 1, env);
 }
 #endif	// NUMERIC_H 
 

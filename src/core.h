@@ -733,7 +733,10 @@ AtomPtr fn_slice (AtomPtr node, AtomPtr env) {
 	int len = (int) type_check  (node->sequence.at (2), AtomType::ARRAY, node)->array[0];
 	int stride = 1;
 	if (node->sequence.size () == 4) stride = (int) type_check  (node->sequence.at (3), AtomType::ARRAY, node)->array[0];
+	
 	if (i < 0 || len < 1 || stride < 1 || i + len  > v1->array.size ()) {
+		std::cout << i << " " << len << " " << v1->array.size () << std::endl;
+		getchar ();
 		error ("invalid indexing for slice", node);
 	}
 	std::valarray<Real> s = v1->array[std::slice (i, len, stride)];
@@ -926,7 +929,7 @@ AtomPtr make_env () {
 	add_builtin ("string", fn_string, 2, env);
 	add_builtin ("exec", fn_exec, 1, env);
 	add_builtin ("exit", fn_exit, 0, env);
-	add_builtin ("import", fn_import, 0, env);    
+	add_builtin ("import", fn_import, 0, env);   
     return env;
 }
 void repl (AtomPtr env, std::istream& in, std::ostream& out) {

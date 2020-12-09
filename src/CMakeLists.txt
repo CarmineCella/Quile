@@ -13,7 +13,7 @@ add_executable(quile quile.cpp core.h BPF.h FFT.h numeric.h system.h TwoPoles.h 
 target_link_libraries (quile dl ${LIBS})
 
 INSTALL(FILES quile.h DESTINATION include)
-INSTALL(PROGRAMS core.tcl DESTINATION $ENV{HOME}/.quile)
+INSTALL(PROGRAMS bootstrap.tcl DESTINATION $ENV{HOME}/.quile)
 INSTALL(
     TARGETS quile 
     RUNTIME DESTINATION bin
