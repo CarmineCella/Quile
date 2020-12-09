@@ -23,7 +23,7 @@ proc lindex {l i} {car [lrange $l $i 1]}
 proc cdr {l} {lrange $l 1 [- [llength $l] 1]}
 proc second {l} {car [cdr $l]}
 proc llast {l} {lindex  $l [- [llength $l] 1]}
-proc ltake {l n} {lrange $l 0 [- $n 1]}
+proc ltake {l n} {lrange $l 0 $n}
 proc ldrop {l n} {
 	if {<= $n 0} {
 		ljoin $l
@@ -37,7 +37,7 @@ proc lrepeat {n l} {
 	}
 }
 proc lsplit {l n} {
-	list [lrange $l 0 [- $n 1]] [ldrop $l $n]
+	list [lrange $l 0 $n] [ldrop $l $n]
 }
 proc lmatch {e l} {
 	if {eq $l {}} {
@@ -52,9 +52,9 @@ proc lmatch {e l} {
 }
 proc lelem {x l} {
 	if {eq 0 [llength [lmatch $x $l]]} {
-		pass $false
+		array $false
 	} else {
-		pass $true
+		array $true
 	}
 }
 proc lreverse {l} {
@@ -84,7 +84,7 @@ proc unpack  {f l} {eval [ljoin [list] $f $l]}
 proc pack {f} {$f $&}
 proc foldl {f z l} {
 	if {eq {} $l} {
-		pass $z
+		list $z
 	} else {
 		foldl $f [$f $z [car $l]] [cdr $l]
 	}
@@ -93,15 +93,14 @@ proc flip {f a b} {$f $b $a}
 proc comp {f g x} {$f [$g $x]}
 
 # logical operators
-proc not {x} {if {pass $x} {pass 0} else {pass 1}}
-proc or {x y}  {if {+ $x $y} {pass 1} else {pass 0}}
-proc and {x y} {if {* $x $y} {pass 1} else {pass 0}}
+proc not {x} {if {array $x} {array 0} else {array 1}}
+proc or {x y}  {if {+ $x $y} {array 1} else {array 0}}
+proc and {x y} {if {* $x $y} {array 1} else {array 0}}
 proc != {n1 n2} {not [eq $n1 $n2]}
 
 # miscellaneous
-set mul-neg [comp - [unpack *]]
-proc sum {l} {foldl + 0 $l}
-proc prod {l} {foldl * 1 $l}
+proc lsum {l} {foldl + 0 $l}
+proc lprod {l} {foldl * 1 $l}
 proc case {x} {
  	if {eq $& {}} {
  		throw "case not found"

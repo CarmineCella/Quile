@@ -12,7 +12,7 @@
 using namespace std;
 
 const char* PACKAGE[] = {"quile"};
-const char* VERSION[] = {"0.2"};
+const char* VERSION[] = {"0.3"};
 
 int main (int argc, char* argv[]) {
 	AtomPtr env = make_env (); // master environment

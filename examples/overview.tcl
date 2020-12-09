@@ -79,7 +79,7 @@ puts $nl
 puts "[(tail) recursion]" $nl $nl
 proc fib {x} {
     if {<= $x 1} {
-        pass 1 # pass is a builtin to just...pass values
+        array 1 
     } else {
         + [fib [- $x 1]] [fib [- $x 2]]
     }
@@ -107,7 +107,7 @@ puts $nl
 
 puts "[partial evaluation]" $nl $nl
 proc two_params {x y} {
-	pass [+ $y $x]
+	array [+ $y $x]
 }
 puts "two_params with... two params = " [two_params 2 3] $nl
 puts "but if you call it with one param you get.." $nl

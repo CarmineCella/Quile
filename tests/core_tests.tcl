@@ -32,8 +32,8 @@ test {eq + -}{0}
 test {eq $+ $-}{0}
 test {eq "alpha" "alpha"}{1}
 test {eq "alpha" "beta"}{0}
-test {catch {except1 } {throw {except1}} {eval 1}}{1}
-test {catch "except2" {throw "except2"} {eval 1}}{1}
+test {catch {except1 } {throw {except1}} {list 1}}{1}
+test {catch "except2" {throw "except2"} {list 1}}{1}
 test {info exists dummy}{1}
 test {info exists not_defined}{0}
 test {info vars "wrong_pattern" }{}
@@ -43,21 +43,24 @@ test {info exists dummy}{0}
 test {info typeof {a b c}} {list}
 test {info typeof {1 2}} {list}
 test {info typeof {}} {list}
-test {info typeof 3} {number}
+test {info typeof 3} {array}
 test {info typeof $*} {builtin}
 test {info typeof [\{x}{+ $x $x}]} {proc}
 test {info typeof "hallo"} {string}
 test {info typeof a} {symbol}
-test  {+ 1 2 [- 3 4 [* 5 6 [/ 5 3]]]} {-48} 
-test {- 1 2 3}{-4}
-test {- 3}{-3}
-test {< 1 2 3 4}{1}
-test {<= 1 2 3 4}{1}
-test {< 1 2 0 4}{0}
-test {> 1 2 3 4}{0}
-test {>= 1 2 3 4}{0}
-test {> 4 4 3 2}{0}
-test {>= 4 4 2}{1}
+test  {+ 1 [- 3 [* 5 [/ 6 3]]]} {-6} 
+# test {sum [- [array 1 2 3] [array 4 4 4]]} {-6}
+test {-  0 3 }{-3}
+test {sum [< [array 1 2 3 4][array 5 5 5 5]]}{4}
+test {sum [<= [array 1 2 3 4][array 5 5 5 5]]}{4}
+test {sum [> [array 1 2 3 4][array 1 1 1 1]]}{3}
+test {sum [>= [array 1 2 3 4][array 1 1 1 1]]}{4}
+test {min [array -4 0 4]}{-4}
+test {max [array -4 0 4]}{4}
+test {mean [array -4 0 4]}{0}
+test {abs [array -4]}{4}
+test {sqrt [array 16]}{4}
+test {sum [* [array 1 2 3 4][array 1 2 3 4]]}{30}
 test {tostr "hallo " "world!"}{"hallo world!"}
 test {string range "hallo world!" 2 5}{"llo w"}
 test {string find "hallo world!""lo" }{3}
@@ -66,8 +69,8 @@ test {string regex "I am looking for GeeksForGeeks articles" "Geek[a-zA-Z]+"}{"G
 test {string regex "GeeksForGeeks" "(Geek)(.*)" } {"GeeksForGeeks" "Geek" "sForGeeks"}
 
 puts $nl "---  atoms ---" $nl
-test {pass $true}{1}
-test {pass $false}{0}
+test {list $true}{1}
+test {list $false}{0}
 
 puts $nl  "---  lists ---" $nl
 test {llength {a b c d}}{4}
@@ -105,18 +108,18 @@ test {lelem 2 {1 2 a b}}{1}
 test {lreverse {a b 2 c}}{c 2 b a}
 test {lreverse {}}{}
 
-# test {zip {1 2 3}{a b c}} {{1 a 2} {b 3 c}}
+test {comp [\{x}{- 0 $x}] [\{x}{* $x $x}] 5}{-25}
 
 puts $nl "---  higher order operators ---" $nl
-test {map - {1 2 3 4}}{-1 -2 -3 -4}
+test {map [\{x}{* $x $x}] {1 2 3 4}}{1 4 9 16}
 test {map [\{x}{* $x $x}] {2 3 4 5}}{4 9 16 25}
 
 test {filter [\{x}{<= $x 2}] {1 2 3 4}} {1 2}
 test {filter [\{x}{> $x 2}] {1 2 3 4}} {3 4}
 test {filter [\{x}{<= $x 2}] {12 22 3 4}} {}
 
-test {unpack + {1 2 3 4}}{10}
-test {unpack * {1 2 3 4}}{24}
+test {unpack + {1 2}}{3}
+test {unpack * {3 4}}{12}
 test {pack car 1 2 3 4} {1}
 test {pack cdr 1 2 3 4} {2 3 4}
 test {pack llength 1 2 {a} 3}{4}
@@ -140,7 +143,8 @@ test {!= {a b c}{a b c}}{0}
 test {!= {a b c}{a b 1}}{1}
 
 puts $nl "--- others ---" $nl
-test {mul-neg {2 8}}{-16}
+test {lsum {1 2 3}}{6}
+test {lprod {1 2 3}}{6}
 proc day-name {x} {
   case $x {1 "Monday"} {2 "Tuesday"} {3 "Wednesday"} {4 "Thursday"} {5 "Friday"} {6 "Saturday"} {7 "Sunday"}
 }

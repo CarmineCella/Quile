@@ -7,21 +7,21 @@ source "core.tcl"
 set b 5
 
 proc static_foo {} {
-	pass [+ $b 5]
+	array [+ $b 5]
 }
 
 proc static_bar {} {
 	set b 2
-	pass [static_foo]
+	array [static_foo]
 }
 
 dynamic dynamic_foo {} {
-	pass [+ $b 5]
+	array [+ $b 5]
 }
 
 proc dynamic_bar {} {
 	set b 2
-	pass [dynamic_foo]
+	array [dynamic_foo]
 }
  
 puts $nl "--- static vs dynamic scope ---" $nl
@@ -38,7 +38,7 @@ test {eval {+ 1 2}}{3}
 test {
 	let {
 		set hhh 123
-		pass [+ $hhh $hhh]
+		array [+ $hhh $hhh]
 	}
 } {246}
 test {unset hhh}{0}
