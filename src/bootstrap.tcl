@@ -1,4 +1,4 @@
-# {Quile core library}
+# {Quile standard library}
 #
 # (c) 2020, www.quile.org
 #
@@ -120,6 +120,14 @@ proc test {x y} {
 		throw [tostr "*** FAILED *** " $x ": "  $res " vs " $y]
 	}
 }	
+
+# arrays
+proc interleave {in1 in2} {
+    set out [bpf 0 [+ [size $in1] [size $in2]] 0]
+    assign $out $in1 0 [size $in1] 2
+    assign $out $in2 1 [size $in2] 2
+    array $out
+}
 
 # eof
 

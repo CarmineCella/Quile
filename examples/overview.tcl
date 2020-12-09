@@ -3,7 +3,7 @@
 # (c) 2020, www.quile.org
 #
 
-source "core.tcl"
+source "stdlib.tcl"
 
 puts "Hallo Quile!!" $nl $nl
 

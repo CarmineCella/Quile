@@ -24,7 +24,7 @@
 #define RED     	"\033[31m" 
 #define RESET   	"\033[0m"
 
-// TODO: line numbers, array tests, libraries
+// TODO: line numbers, improve error messages, array tests, libraries
 
 // ast
 struct Atom;
@@ -174,16 +174,20 @@ std::string get_token (std::istream& input) {
 std::ostream& puts (AtomPtr node, std::ostream& out, bool is_write);
 void error (const std::string& err, AtomPtr node) {
 	std::stringstream tmp;
+	std::stringstream tmp2;
 	tmp << err;
 	if (node) {
-		std::stringstream tmp2;
 		puts (node, tmp2, true);
-		tmp << " " << tmp2.str ();
+		std::cout << "sz  " << tmp2.str ().size () << std::endl;
+		if (tmp2.str ().size () > 75) {
+			std::string cut = tmp2.str ();
+			cut = cut.substr (0, 75);
+			tmp2.str ("");
+			tmp2 << cut << "...";
+		}
 	}
-	if (tmp.str ().size () > 75) {
-		tmp.str ().substr (0, 75);
-		tmp << "...";
-	}
+	tmp << " " << tmp2.str ();
+	getchar ();
 	throw std::runtime_error (tmp.str ());
 }
 AtomPtr args_check (AtomPtr node, unsigned ct, AtomPtr ctx = Atom::make_sequence ()) {
@@ -558,9 +562,9 @@ AtomPtr fn_ljoin (AtomPtr params, AtomPtr env) {
 }
 AtomPtr fn_while (AtomPtr b,  AtomPtr env) {
 	AtomPtr res = Atom::make_sequence();
-	AtomPtr cond = eval (type_check (b->sequence.at (0), AtomType::LIST, b), env);
+	AtomPtr cond = type_check (b->sequence.at (0), AtomType::LIST, b);
 	AtomPtr code = split_sequence (b->sequence.at (1));
-	while (type_check (cond, AtomType::ARRAY, b)->array[0]) {
+	while (type_check (eval (cond, env), AtomType::ARRAY, b)->array[0]) {
 		for (unsigned i = 0; i < code->sequence.size (); ++i) {
 			AtomPtr p = code->sequence.at (i);
 			try {
