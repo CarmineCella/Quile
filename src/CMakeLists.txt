@@ -9,7 +9,7 @@ if (ENABLE_READLINE)
     add_definitions (-DENABLE_READLINE)
 endif()
 
-add_executable(quile quile.cpp quile.h)
+add_executable(quile quile.cpp core.h BPF.h FFT.h numeric.h system.h TwoPoles.h WavFile.h)
 target_link_libraries (quile dl ${LIBS})
 
 INSTALL(FILES quile.h DESTINATION include)

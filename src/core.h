@@ -864,7 +864,7 @@ AtomPtr make_env () {
 	env->sequence.push_back (Atom::make_sequence ()); // parent
     // environments
     add_builtin("set", fn_set<false>, 2, env);
-    add_builtin("setrec", fn_set<true>, 2, env);
+    // add_builtin("setrec", fn_set<true>, 2, env);
     add_builtin("updef", fn_updef, 2, env);
     add_builtin("unset", fn_unset, 1, env);
     add_builtin("\\", fn_lambda<false>, 2, env);
