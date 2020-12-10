@@ -20,14 +20,14 @@ set amps [list]
 set i 0
 while {< $i [size $mag]} {
     set v [slice $mag $i 1]
-    lappend $amps [bpf $v $samps $v]
+    ljoin $amps [bpf $v $samps $v]
     set i [+ $i 1]
 }
 set freqs [list]
 set i 0
 while {< $i [size $mag]} {
     set v [slice $fftfreqs $i 1]
-    lappend $freqs [bpf $v $samps $v]
+    ljoin $freqs [bpf $v $samps $v]
     set i [+ $i 1]
 }
 
