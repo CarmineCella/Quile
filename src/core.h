@@ -24,7 +24,7 @@
 #define RED     	"\033[31m" 
 #define RESET   	"\033[0m"
 
-// TODO: line numbers, improve error messages, array tests, libraries
+// TODO: line numbers, improve error messages, array tests, system, plotting, better examples, pvoc, grain
 
 // ast
 struct Atom;
@@ -737,8 +737,6 @@ AtomPtr fn_slice (AtomPtr node, AtomPtr env) {
 	if (node->sequence.size () == 4) stride = (int) type_check  (node->sequence.at (3), AtomType::ARRAY, node)->array[0];
 	
 	if (i < 0 || len < 1 || stride < 1 || i + len  > v1->array.size ()) {
-		std::cout << i << " " << len << " " << v1->array.size () << std::endl;
-		getchar ();
 		error ("invalid indexing for slice", node);
 	}
 	std::valarray<Real> s = v1->array[std::slice (i, len, stride)];

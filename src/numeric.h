@@ -121,6 +121,36 @@ AtomPtr fn_osc (AtomPtr node, AtomPtr env) {
 	}
 	return Atom::make_array (out);
 }
+AtomPtr fn_reson (AtomPtr node, AtomPtr env) {
+	AtomPtr in = type_check (node->sequence.at (0), AtomType::ARRAY, node);
+	Real sr = type_check (node->sequence.at (1), AtomType::ARRAY, node)->array[0];
+	Real freq = type_check (node->sequence.at (2), AtomType::ARRAY, node)->array[0];
+	Real tau = type_check (node->sequence.at (3), AtomType::ARRAY, node)->array[0];
+	
+	Real om = 2 * M_PI * (freq / sr);
+	Real B = 1. / tau;
+	Real t = 1. / sr;
+	Real radius = exp (-2. * M_PI * B * t);
+	Real a1 = -2 * radius * cos (om);
+	Real a2 = radius * radius;
+	Real gain = radius * sin (om);
+
+	int samps = (int) (sr * tau);
+	std::valarray<Real> out (samps);
+	int insize = in->array.size ();
+
+	Real x1 = 0;
+	Real y1 = 0;
+	Real y2 = 0;
+	for (unsigned i = 0; i < samps; ++i) {
+		Real v = gain * x1 - (a1 * y1) - (a2 * y2);
+		x1 = i < insize ? in->array[i] : 0;
+		y2 = y1;
+		y1 = v;
+		out[i] = v;
+	}
+	return Atom::make_array (out);
+}
 template <int sign>
 AtomPtr fn_fft (AtomPtr n, AtomPtr env) {
 	int d = type_check (n->sequence.at (0), AtomType::ARRAY, n)->array.size ();
@@ -180,7 +210,13 @@ AtomPtr fn_conv (AtomPtr n, AtomPtr env) {
     }
     return Atom::make_array (out);
 }
-// // I/O  -----------------------------------------------------------------------
+AtomPtr fn_noise (AtomPtr n, AtomPtr env) {
+ 	int len = (int) type_check (n->sequence.at (0), AtomType::ARRAY, n)->array[0];
+	std::valarray<Real> out (len);
+	for (unsigned i = 0; i < len; ++i) out[i] = ((Real) rand () / RAND_MAX) * 2. - 1;
+	return Atom::make_array (out);
+}
+// I/O  -----------------------------------------------------------------------
 AtomPtr fn_sndwrite (AtomPtr node, AtomPtr env) {
 	Real sr = type_check (node->sequence.at (0), AtomType::ARRAY, node)->array[0];
 	std::valarray<Real> vals;
@@ -226,11 +262,13 @@ void add_numeric (AtomPtr env) {
 	add_builtin ("mix", fn_mix, 2, env);	
 	add_builtin ("gen", fn_gen, 2, env);
 	add_builtin ("osc", fn_osc, 3, env);
+	add_builtin ("reson", fn_reson, 3, env);
 	add_builtin ("fft", fn_fft<1>, 1, env);
 	add_builtin ("ifft", fn_fft<-1>, 1, env);
 	add_builtin ("car2pol", fn_car2pol, 1, env);
 	add_builtin ("pol2car", fn_pol2car, 1, env);
 	add_builtin ("conv", fn_conv, 3, env);
+	add_builtin ("noise", fn_noise, 1, env);
 	// // I/O
 	add_builtin ("sndwrite", fn_sndwrite, 3, env);
 	add_builtin ("sndread", fn_sndread, 1, env);
