@@ -507,10 +507,6 @@ AtomPtr fn_lcar (AtomPtr params, AtomPtr env) {
 	if (is_null(l)) return Atom::make_sequence();
 	return l->sequence.at(0);
 }
-AtomPtr fn_lappend (AtomPtr node, AtomPtr env) {
-	type_check (node->sequence.at (0), AtomType::LIST, node)->sequence.push_back (node->sequence.at (1));
-	return node->sequence.at (0);
-}
 AtomPtr fn_lrange (AtomPtr params, AtomPtr env) {
 	AtomPtr l = type_check (params->sequence.at (0), AtomType::LIST, params);
 	int i = (int) (type_check(params->sequence.at (1), AtomType::ARRAY, params)->array[0]);
@@ -884,7 +880,6 @@ AtomPtr make_env () {
 	// sequences
 	add_builtin ("list", fn_list, 0, env);
 	add_builtin ("car", fn_lcar, 1, env);
-	add_builtin ("lappend", fn_lappend, 2, env);
 	add_builtin ("lrange", fn_lrange, 3, env);
 	add_builtin ("lreplace", fn_lreplace, 4, env);
 	add_builtin ("llength", fn_llength, 1, env);
