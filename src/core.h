@@ -178,7 +178,6 @@ void error (const std::string& err, AtomPtr node) {
 	tmp << err;
 	if (node) {
 		puts (node, tmp2, true);
-		std::cout << "sz  " << tmp2.str ().size () << std::endl;
 		if (tmp2.str ().size () > 75) {
 			std::string cut = tmp2.str ();
 			cut = cut.substr (0, 75);
@@ -187,7 +186,6 @@ void error (const std::string& err, AtomPtr node) {
 		}
 	}
 	tmp << " " << tmp2.str ();
-	getchar ();
 	throw std::runtime_error (tmp.str ());
 }
 AtomPtr args_check (AtomPtr node, unsigned ct, AtomPtr ctx = Atom::make_sequence ()) {
@@ -392,7 +390,7 @@ std::ostream& puts (AtomPtr node, std::ostream& out, bool is_write = false) {
 	switch (node->type) {
 		case ARRAY:
 			for (unsigned i = 0; i < node->array.size (); ++i) {
-				out << node->array[i] << " ";
+				out << node->array[i] << (i == node->array.size () - 1 ? "" : " ");
 			}
 		break;		
 		case SYMBOL: case STRING:
@@ -509,6 +507,10 @@ AtomPtr fn_lcar (AtomPtr params, AtomPtr env) {
 	if (is_null(l)) return Atom::make_sequence();
 	return l->sequence.at(0);
 }
+AtomPtr fn_lappend (AtomPtr node, AtomPtr env) {
+	type_check (node->sequence.at (0), AtomType::LIST, node)->sequence.push_back (node->sequence.at (1));
+	return node->sequence.at (0);
+}
 AtomPtr fn_lrange (AtomPtr params, AtomPtr env) {
 	AtomPtr l = type_check (params->sequence.at (0), AtomType::LIST, params);
 	int i = (int) (type_check(params->sequence.at (1), AtomType::ARRAY, params)->array[0]);
@@ -605,7 +607,7 @@ AtomPtr fn_format (AtomPtr node, AtomPtr env) {
 	}
 	switch (mode) {
 		case 0:
-			std::cout << tmp.str ();
+			std::cout << tmp.str (); std::cout.flush ();
 			return Atom::make_string ("");
 		break;
 		case 1:
@@ -882,6 +884,7 @@ AtomPtr make_env () {
 	// sequences
 	add_builtin ("list", fn_list, 0, env);
 	add_builtin ("car", fn_lcar, 1, env);
+	add_builtin ("lappend", fn_lappend, 2, env);
 	add_builtin ("lrange", fn_lrange, 3, env);
 	add_builtin ("lreplace", fn_lreplace, 4, env);
 	add_builtin ("llength", fn_llength, 1, env);

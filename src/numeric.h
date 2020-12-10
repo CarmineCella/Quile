@@ -123,10 +123,13 @@ AtomPtr fn_osc (AtomPtr node, AtomPtr env) {
 }
 template <int sign>
 AtomPtr fn_fft (AtomPtr n, AtomPtr env) {
-    std::valarray<Real> inout = type_check (n->sequence.at (0), AtomType::ARRAY, n)->array;
- 	int N = next_pow2 (inout.size ());
+	int d = type_check (n->sequence.at (0), AtomType::ARRAY, n)->array.size ();
+	int N = next_pow2 (d);
+	int norm = (sign < 0 ? 1 : N / 2);
+    std::valarray<Real> inout (N);
+	for (unsigned i = 0; i < d; ++i) inout[i] = n->sequence.at(0)->array[i];
     fft<Real> (&inout[0], N / 2, sign);
-  	int norm = (sign < 0 ? 1 : N / 2);
+  	
 	for (unsigned i = 0; i < N; ++i) inout[i] /= norm;	
 	return Atom::make_array (inout);
 }
