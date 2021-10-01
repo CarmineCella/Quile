@@ -1,7 +1,7 @@
-// quile.h
+// core.h
 //
-#ifndef QUILE_H
-#define QUILE_H
+#ifndef CORE_H
+#define CORE_H
 
 #include <deque>
 #include <string>
@@ -970,4 +970,4 @@ void repl (AtomPtr env, std::istream& in, std::ostream& out) {
 
 // EOF
 
-#endif // QUILE_H
+#endif // CORE_H
