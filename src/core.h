@@ -24,7 +24,29 @@
 #define RED     	"\033[31m" 
 #define RESET   	"\033[0m"
 
-// TODO: line numbers, improve error messages, array tests, system, plotting, better examples, pvoc, grain
+// TODO:
+// line numbers
+// improve error messages
+// system
+// array tests
+// audio I/O
+// rt playback
+// load db
+// granular orchestration
+// features + pitch + onsets
+// clustering
+// maple
+// orchidea
+// sparkle / blockconv / pvoc
+// soundtypes (?)
+// nebula
+// nn (?)
+// plotting (SVG)
+// ambienc3
+// ambidec (?)
+// osc output
+// musicxml output
+// better examples
 
 // ast
 struct Atom;
