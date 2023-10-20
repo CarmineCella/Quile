@@ -1,0 +1,24 @@
+digraph G {
+    node [shape = box]
+    "score" [style = bold, fillcolor = gray,  style= filled]
+     "score" -> "render"
+     "assisted\norchestration" -> "score"
+     "CAC" -> "score"
+     "score" -> "MusicXML"
+     "MusicXML" -> "score" [style = "dashed"]
+     "score" -> "save"
+     "load" -> "score"
+     "score" -> "MIDI" [style = "dashed"]
+     "MIDI" -> "score" [style = "dashed"]
+     "sound\nsynthesis" -> "assisted\norchestration"
+     "render" -> "timeline"
+     "sound\nsynthesis" -> "timeline"
+     "WAV/AIFF files" -> "timeline"
+     "WAV/AIFF files" -> "assisted\norchestration"
+     "timeline" [style = bold, fillcolor = gray, style= filled]
+     "timeline" -> "real time\nplayback"
+     "timeline" -> "WAV/AIFF files"
+     "timeline" -> "SVG visualisation"
+     "SVG visualisation" -> "WAV/AIFF files" [style = "dashed"]
+     "timeline" -> "OSC output"
+}
