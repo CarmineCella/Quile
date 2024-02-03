@@ -1,3 +1,5 @@
+*** OBSOLETE. PLEASE REFER TO THE PROJECT https://github.com/CarmineCella/f8***
+
 # {Quile}
 
 The *Quile* scripting language is a hybrid dialect of Lisp, Scheme and TCL: 
